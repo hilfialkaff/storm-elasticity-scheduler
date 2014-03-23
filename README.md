@@ -1,7 +1,7 @@
-storm_bandwidth_scheduler
-=========
+Storm Elasticity Scheduler
+==========================
 
-Storm scheduler based on the available bandwidth in the network topology.
+TBD...
 
 Compiling
 * mvn package
