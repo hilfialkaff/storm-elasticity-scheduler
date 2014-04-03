@@ -1,5 +1,7 @@
 package storm.scheduler;
 
+import java.io.BufferedReader;
+import java.io.FileReader;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
@@ -30,7 +32,7 @@ public class ElasticityScheduler implements IScheduler {
     private final String TOPOLOGY_NAME = "TestTopology";
     private static final Logger LOG = LoggerFactory
         .getLogger(ElasticityScheduler.class);
-    private final int count = 0;
+    private static final String TOPOLOGY_FILE = "./topology.txt";
 
     @Override
     public void prepare(Map conf) {
@@ -86,4 +88,27 @@ public class ElasticityScheduler implements IScheduler {
         new EvenScheduler().schedule(topologies, cluster);
     }
 
+    public void read_topology() throws Exception {
+        Node root = new Node("root");
+
+        FileReader file = new FileReader(TOPOLOGY_FILE);
+        BufferedReader reader = new BufferedReader(file);
+        String line = null;
+
+        while ((line = reader.readLine()) != null) {
+            String _line[] = line.split(",");
+            Node parent = new Node(_line[0]);
+            Node child = new Node(_line[1]);
+
+            parent.addChildren(child);
+            root.addChildren(parent);
+            root.addChildren(child);
+        }
+
+        reader.close();
+    }
+
+    public void main(String[] args) throws Exception {
+        read_topology();
+    }
 }
