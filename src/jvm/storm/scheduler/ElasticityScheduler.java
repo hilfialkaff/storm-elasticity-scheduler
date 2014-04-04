@@ -46,7 +46,12 @@ public class ElasticityScheduler implements IScheduler {
     @Override
     public void prepare(Map conf) {
 	String[] cmd = { "./getMetrics.sh peng 10 /var/storm/storm-0.9.1/logs/metrics.log metrics 2" };
-        Process p = Runtime.getRuntime().exec(cmd);
+	try{
+        	Process p = Runtime.getRuntime().exec(cmd);
+	}
+	catch (IOException e){ 
+		System.err.println("Caught IOException: " + e.getMessage());
+	}
     }
 
     @Override
@@ -105,8 +110,14 @@ public class ElasticityScheduler implements IScheduler {
     
     //Parse metric data	
     public void parse_data(String metric_file){
-	
-        FileInputStream fis = new FileInputStream(metric_file);
+	FileInputStream fis=null;
+	try{	
+        	fis = new FileInputStream(metric_file);
+	}
+	catch(FileNotFoundException e){
+		System.err.println("Caught FileNotFoundException: " + e.getMessage());
+		return;
+	}
         Scanner scanner = new Scanner(fis);
 	Map<String, Double> occurrence = new HashMap<String, Double>();
 	Map<String, Double> numExecute = new HashMap<String, Double>();
