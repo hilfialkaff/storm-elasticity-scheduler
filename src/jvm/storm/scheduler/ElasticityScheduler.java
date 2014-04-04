@@ -45,20 +45,29 @@ public class ElasticityScheduler implements IScheduler {
 
     @Override
     public void prepare(Map conf) {
-	String[] cmd = { "./getMetrics.sh peng 10 /var/storm/storm-0.9.1/logs/metrics.log metrics 2" };
+	/**
+	String[] cmd = { "/users/peng/storm-elasticity-scheduler/src/jvm/storm/scheduler/getMetrics.sh peng 10 /var/storm/storm-0.9.1/logs/metrics.log /users/peng/storm-elasticity-scheduler/src/jvm/storm/scheduler/metrics 2 /" };
 	try{
         	Process p = Runtime.getRuntime().exec(cmd);
 	}
 	catch (IOException e){ 
 		System.err.println("Caught IOException: " + e.getMessage());
 	}
+
+	**/
+	try {
+            Process proc = Runtime.getRuntime().exec("/users/peng/storm-elasticity-scheduler/src/jvm/storm/scheduler/getMetrics.sh peng 10 /var/storm/storm-0.9.1/logs/metrics.log /users/peng/storm-elasticity-scheduler/src/jvm/storm/scheduler/metrics 2 /"); //Whatever you want to execute
+          
+        } catch (IOException e) {
+            System.out.println(e.getMessage());
+        }
     }
 
     @Override
     public void schedule(Topologies topologies, Cluster cluster) {
         
 	//get metrics
-	parse_data("metrics/metrics.log");
+	parse_data("/users/peng/storm-elasticity-scheduler/src/jvm/storm/scheduler/metrics/metrics.log");
 	
 	// Gets the topology which we want to schedule
         TopologyDetails topology = topologies.getByName(TOPOLOGY_NAME);
@@ -93,7 +102,7 @@ public class ElasticityScheduler implements IScheduler {
                     .getSupervisors().values();
                 for (SupervisorDetails supervisor : supervisors) {
                     Map meta = (Map) supervisor.getSchedulerMeta();
-                    LOG.info("Supervisor name: " + meta.get("name").toString());
+                    //LOG.info("Supervisor name: " + meta.get("name").toString());
 
                     List<WorkerSlot> availableSlots = cluster
                         .getAvailableSlots(supervisor);

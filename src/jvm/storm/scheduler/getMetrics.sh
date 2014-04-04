@@ -32,7 +32,8 @@ do
 			rm ${4}/data/current_metrics_$HOSTNAME
 
 			echo "scp  $USERNAME@$HOSTNAME:$3 ${4}/data/current_metrics_$HOSTNAME"
-			scp $USERNAME@$HOSTNAME:$3 ${4}/data/current_metrics_$HOSTNAME
+#			 sshpass -p "pengster" ssh -o StrictHostKeyChecking=no $USERNAME@$HOSTNAME:$3
+			sshpass  -p "pengster" scp $USERNAME@$HOSTNAME:$3 ${4}/data/current_metrics_$HOSTNAME
 
 			echo "diff ${4}/data/current_metrics_$HOSTNAME ${4}/data/previous_metrics_$HOSTNAME | grep execute_count | grep -v "^---" | grep -v "^[0-9c0-9]" | sed 's/^..//' > ${4}/data/latest_interval_metrics_$HOSTNAME"
 			diff ${4}/data/current_metrics_$HOSTNAME ${4}/data/previous_metrics_$HOSTNAME | grep execute_count | grep -v "^---" | grep -v "^[0-9c0-9]" | sed 's/^..//' > ${4}/data/latest_interval_metrics_$HOSTNAME
@@ -48,7 +49,7 @@ do
 			echo "!--${HOSTNAME}--!"
 
 			echo "scp $USERNAME@$HOSTNAME:$3 ${4}/data/current_metrics_$HOSTNAME"
-			scp $USERNAME@$HOSTNAME:$3 ${4}/data/current_metrics_$HOSTNAME
+			sshpass  -p "pengster" scp $USERNAME@$HOSTNAME:$3 ${4}/data/current_metrics_$HOSTNAME
 			
 			echo "${4}/data/current_metrics_$HOSTNAME >> ${4}/metrics.log"
 			cat ${4}/data/current_metrics_$HOSTNAME >> ${4}/metrics.log
