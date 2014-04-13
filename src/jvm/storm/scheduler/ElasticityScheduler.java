@@ -38,7 +38,9 @@ public class ElasticityScheduler implements IScheduler {
     private final String TOPOLOGY_NAME = "TestTopology";
     private static final Logger LOG = LoggerFactory
         .getLogger(ElasticityScheduler.class);
-    private static final String TOPOLOGY_FILE = "./topology.txt";
+    private static final String TOPOLOGY_FILE = "/proj/CS525/exp/stormCluster/project/storm-experiments/topology.txt";
+    private static Node root = new Node("root");
+ 
 
     @Override
     public void prepare(Map conf) {
@@ -54,7 +56,7 @@ public class ElasticityScheduler implements IScheduler {
             Process proc = Runtime
                 .getRuntime()
                 .exec(
-                    "/users/peng/storm-elasticity-scheduler/src/jvm/storm/scheduler/getMetrics.sh peng 10 /var/storm/storm-0.9.1/logs/metrics.log /users/peng/storm-elasticity-scheduler/src/jvm/storm/scheduler/metrics 2 /"); // Whatever
+                    "/proj/CS525/exp/stormCluster/project/storm-elasticity-scheduler/src/jvm/storm/scheduler/getMetrics.sh peng 10 /var/storm/storm-0.9.1/logs/metrics.log /proj/CS525/exp/stormCluster/project/storm-elasticity-scheduler/src/jvm/storm/scheduler/metrics 1 pengster /"); // Whatever
                                                                                                                                                                                                                                 // you
                                                                                                                                                                                                                                 // want
                                                                                                                                                                                                                                 // to
@@ -69,7 +71,7 @@ public class ElasticityScheduler implements IScheduler {
     public void schedule(Topologies topologies, Cluster cluster) {
 
         // get metrics
-        parse_data("/users/peng/storm-elasticity-scheduler/src/jvm/storm/scheduler/metrics/metrics.log");
+        parse_data("/proj/CS525/exp/stormCluster/project/storm-elasticity-scheduler/src/jvm/storm/scheduler/metrics/metrics.log");
 
         // Gets the topology which we want to schedule
         TopologyDetails topology = topologies.getByName(TOPOLOGY_NAME);
@@ -135,7 +137,10 @@ public class ElasticityScheduler implements IScheduler {
         Map<String, Double> numExecute = new HashMap<String, Double>();
         while (scanner.hasNextLine()) {
             // System.out.println(scanner.nextLine());
-            String[] splited = scanner.nextLine().split("\\s+");
+            String line = scanner.nextLine();
+            String[] splited = line.split("\\s+");
+            int numCount = 0;
+
             for (int i = 0; i < splited.length; i++) {
                 // System.out.println(Integer.toString(i)+"---"+splited[i]);
             }
@@ -143,8 +148,16 @@ public class ElasticityScheduler implements IScheduler {
                 occurrence.put(splited[5], 0.0);
                 numExecute.put(splited[5], 0.0);
             }
+
+            try {
+                numCount = Integer.parseInt(splited[7]);
+            } catch (Exception e) {
+                LOG.info(e.getMessage());
+                continue;
+            }
+
             numExecute.put(splited[5],
-                numExecute.get(splited[5]) + Integer.parseInt(splited[7]));
+                numExecute.get(splited[5]) + numCount);
             occurrence.put(splited[5], occurrence.get(splited[5]) + 1);
             // System.out.println(map.get(splited[5]));
         }
@@ -173,15 +186,22 @@ public class ElasticityScheduler implements IScheduler {
             Map.Entry entry = (Map.Entry) it.next();
             String key = (String) entry.getKey();
             double val = (Double) entry.getValue();
+            String nodeName = (key.split(":"))[1];
+            LOG.info("Getting average for: " + nodeName);
+            Node node = root.getChildren(nodeName);
 
             double avg = (val) / (Double) occurrence.get(key);
             System.out.println(key + " avg: " + avg);
+
+            if (node == null) { 
+                LOG.info("TOPOLOGY INFORMATION IS WRONG");
+            } else {
+                node.setThroughput(avg);
+            }
         }
     }
 
     public void read_topology() {
-        Node root = new Node("root");
-
         FileReader file;
         try {
             file = new FileReader(TOPOLOGY_FILE);

@@ -4,8 +4,10 @@
 #$3 - path to metrics file on remote host
 #$4 - path to folder at which metrics files will be stored
 #$5 - num of nodes
+#$6 - password
 USERNAME=${1}
 SCRIPT="sudo rm $3"
+sudo rm -r $4
 if [ ! -d "$4" ]; then
 	echo "created directory $4"
 	mkdir $4
@@ -33,7 +35,7 @@ do
 
 			echo "scp  $USERNAME@$HOSTNAME:$3 ${4}/data/current_metrics_$HOSTNAME"
 #			 sshpass -p "pengster" ssh -o StrictHostKeyChecking=no $USERNAME@$HOSTNAME:$3
-			sshpass  -p "pengster" scp $USERNAME@$HOSTNAME:$3 ${4}/data/current_metrics_$HOSTNAME
+			sshpass  -p "$6" scp $USERNAME@$HOSTNAME:$3 ${4}/data/current_metrics_$HOSTNAME
 
 			echo "diff ${4}/data/current_metrics_$HOSTNAME ${4}/data/previous_metrics_$HOSTNAME | grep execute_count | grep -v "^---" | grep -v "^[0-9c0-9]" | sed 's/^..//' > ${4}/data/latest_interval_metrics_$HOSTNAME"
 			diff ${4}/data/current_metrics_$HOSTNAME ${4}/data/previous_metrics_$HOSTNAME | grep execute_count | grep -v "^---" | grep -v "^[0-9c0-9]" | sed 's/^..//' > ${4}/data/latest_interval_metrics_$HOSTNAME
@@ -49,10 +51,10 @@ do
 			echo "!--${HOSTNAME}--!"
 
 			echo "scp $USERNAME@$HOSTNAME:$3 ${4}/data/current_metrics_$HOSTNAME"
-			sshpass  -p "pengster" scp $USERNAME@$HOSTNAME:$3 ${4}/data/current_metrics_$HOSTNAME
+			sshpass  -p "$6" scp $USERNAME@$HOSTNAME:$3 ${4}/data/current_metrics_$HOSTNAME
 			
 			echo "${4}/data/current_metrics_$HOSTNAME >> ${4}/metrics.log"
-			cat ${4}/data/current_metrics_$HOSTNAME >> ${4}/metrics.log
+			cat ${4}/data/current_metrics_$HOSTNAME | grep execute_count >> ${4}/metrics.log
 		done	
 		#ssh -o StrictHostKeyChecking=no -l ${USERNAME} ${HOSTNAME} "${SCRIPT}"
 	fi
