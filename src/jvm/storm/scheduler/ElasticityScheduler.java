@@ -1,15 +1,18 @@
 package storm.scheduler;
 
 import java.io.BufferedReader;
+import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Scanner;
 
 import org.mortbay.log.Log;
@@ -35,12 +38,15 @@ import backtype.storm.scheduler.WorkerSlot;
  * </pre>
  */
 public class ElasticityScheduler implements IScheduler {
-    private final String TOPOLOGY_NAME = "TestTopology";
     private static final Logger LOG = LoggerFactory
         .getLogger(ElasticityScheduler.class);
-    private static final String TOPOLOGY_FILE = "/proj/CS525/exp/stormCluster/project/storm-experiments/topology.txt";
-    private static Node root = new Node("root");
- 
+    // private static final String TOPOLOGY_DIR =
+    // "/proj/CS525/exp/stormCluster/project/storm-experiments/topologies/";
+    private static final String TOPOLOGY_DIR = "../storm-experiments/topologies";
+    private static final String ROOT_NODE = "root";
+
+    private static HashMap<String, Topology> _topologies;
+    private static int _numMachines = 0;
 
     @Override
     public void prepare(Map conf) {
@@ -51,16 +57,16 @@ public class ElasticityScheduler implements IScheduler {
          * (IOException e){ System.err.println("Caught IOException: " +
          * e.getMessage()); }
          **/
-        read_topology();
+        readTopology();
         try {
             Process proc = Runtime
                 .getRuntime()
                 .exec(
                     "/proj/CS525/exp/stormCluster/project/storm-elasticity-scheduler/src/jvm/storm/scheduler/getMetrics.sh peng 10 /var/storm/storm-0.9.1/logs/metrics.log /proj/CS525/exp/stormCluster/project/storm-elasticity-scheduler/src/jvm/storm/scheduler/metrics 1 pengster /"); // Whatever
-                                                                                                                                                                                                                                // you
-                                                                                                                                                                                                                                // want
-                                                                                                                                                                                                                                // to
-                                                                                                                                                                                                                                // execute
+            // you
+            // want
+            // to
+            // execute
 
         } catch (IOException e) {
             System.out.println(e.getMessage());
@@ -71,51 +77,68 @@ public class ElasticityScheduler implements IScheduler {
     public void schedule(Topologies topologies, Cluster cluster) {
 
         // get metrics
-        parse_data("/proj/CS525/exp/stormCluster/project/storm-elasticity-scheduler/src/jvm/storm/scheduler/metrics/metrics.log");
+        // parse_data("/proj/CS525/exp/stormCluster/project/storm-elasticity-scheduler/src/jvm/storm/scheduler/metrics/metrics.log");
 
-        // Gets the topology which we want to schedule
-        TopologyDetails topology = topologies.getByName(TOPOLOGY_NAME);
+        if (cluster.getSupervisors().size() == _numMachines) {
+            return;
+        }
 
-        // make sure the special topology is submitted,
-        if (topology != null) {
-            boolean needsScheduling = cluster.needsScheduling(topology);
+        readTopology();
+        ArrayList<String> topologyToDelete = new ArrayList<String>();
 
-            if (!needsScheduling) {
-                Log.info("Our special topology DOES NOT NEED scheduling.");
+        for (Entry<String, Topology> topoEntry : _topologies.entrySet()) {
+            TopologyDetails topology = topologies.getByName(topoEntry.getKey());
+
+            // Topology doesn't exist anymore -> remove from database, else
+            // schedule
+            if (topology == null) {
+                topologyToDelete.add(topoEntry.getKey());
             } else {
-                System.out.println("Our special topology needs scheduling.");
-                // find out all the needs-scheduling components of this topology
-                Map<String, List<ExecutorDetails>> componentToExecutors = cluster
-                    .getNeedsSchedulingComponentToExecutors(topology);
+                boolean needsScheduling = cluster.needsScheduling(topology);
 
-                Log.info("needs scheduling(component->executor): "
-                    + componentToExecutors);
-                Log.info("needs scheduling(executor->components): "
-                    + cluster.getNeedsSchedulingExecutorToComponents(topology));
-                SchedulerAssignment currentAssignment = cluster
-                    .getAssignmentById(topologies.getByName(TOPOLOGY_NAME)
-                        .getId());
-                if (currentAssignment != null) {
-                    Log.info("current assignments: "
-                        + currentAssignment.getExecutorToSlot());
+                if (!needsScheduling) {
+                    Log.info("Our topology DOES NOT NEED scheduling.");
                 } else {
-                    Log.info("current assignments: {}");
-                }
+                    System.out.println("Our topology needs scheduling.");
+                    // find out all the needs-scheduling components of this
+                    // topology
+                    Map<String, List<ExecutorDetails>> componentToExecutors = cluster
+                        .getNeedsSchedulingComponentToExecutors(topology);
 
-                Collection<SupervisorDetails> supervisors = cluster
-                    .getSupervisors().values();
-                for (SupervisorDetails supervisor : supervisors) {
-                    Map meta = (Map) supervisor.getSchedulerMeta();
-                    // LOG.info("Supervisor name: " +
-                    // meta.get("name").toString());
+                    Log.info("needs scheduling(component->executor): "
+                        + componentToExecutors);
+                    Log.info("needs scheduling(executor->components): "
+                        + cluster
+                            .getNeedsSchedulingExecutorToComponents(topology));
+                    SchedulerAssignment currentAssignment = cluster
+                        .getAssignmentById(topology.getId());
+                    if (currentAssignment != null) {
+                        Log.info("current assignments: "
+                            + currentAssignment.getExecutorToSlot());
+                    } else {
+                        Log.info("current assignments: {}");
+                    }
 
-                    List<WorkerSlot> availableSlots = cluster
-                        .getAvailableSlots(supervisor);
-                    for (WorkerSlot slot : availableSlots) {
-                        LOG.info("Slot: " + slot.getPort());
+                    Collection<SupervisorDetails> supervisors = cluster
+                        .getSupervisors().values();
+                    _numMachines = supervisors.size();
+
+                    for (SupervisorDetails supervisor : supervisors) {
+                        Map meta = (Map) supervisor.getSchedulerMeta();
+
+                        List<WorkerSlot> availableSlots = cluster
+                            .getAvailableSlots(supervisor);
+                        for (WorkerSlot slot : availableSlots) {
+                            LOG.info("Slot: " + slot.getPort());
+                        }
                     }
                 }
             }
+        }
+
+        /* Delete non-existant topologies */
+        for (String s : topologyToDelete) {
+            _topologies.remove(s);
         }
 
         // Use EvenScheduler for the rest
@@ -156,8 +179,7 @@ public class ElasticityScheduler implements IScheduler {
                 continue;
             }
 
-            numExecute.put(splited[5],
-                numExecute.get(splited[5]) + numCount);
+            numExecute.put(splited[5], numExecute.get(splited[5]) + numCount);
             occurrence.put(splited[5], occurrence.get(splited[5]) + 1);
             // System.out.println(map.get(splited[5]));
         }
@@ -181,50 +203,68 @@ public class ElasticityScheduler implements IScheduler {
     }
 
     public static void getAverage(Map occurrence, Map numExecute) {
-        Iterator it = numExecute.entrySet().iterator();
-        while (it.hasNext()) {
-            Map.Entry entry = (Map.Entry) it.next();
-            String key = (String) entry.getKey();
-            double val = (Double) entry.getValue();
-            String nodeName = (key.split(":"))[1];
-            LOG.info("Getting average for: " + nodeName);
-            Node node = root.getChildren(nodeName);
-
-            double avg = (val) / (Double) occurrence.get(key);
-            System.out.println(key + " avg: " + avg);
-
-            if (node == null) { 
-                LOG.info("TOPOLOGY INFORMATION IS WRONG");
-            } else {
-                node.setThroughput(avg);
-            }
-        }
+        // Iterator it = numExecute.entrySet().iterator();
+        // while (it.hasNext()) {
+        // Map.Entry entry = (Map.Entry) it.next();
+        // String key = (String) entry.getKey();
+        // double val = (Double) entry.getValue();
+        // String nodeName = (key.split(":"))[1];
+        // LOG.info("Getting average for: " + nodeName);
+        // Node node = root.getChildren(nodeName);
+        //
+        // double avg = (val) / (Double) occurrence.get(key);
+        // System.out.println(key + " avg: " + avg);
+        //
+        // if (node == null) {
+        // LOG.info("TOPOLOGY INFORMATION IS WRONG");
+        // } else {
+        // node.setThroughput(avg);
+        // }
+        // }
     }
 
-    public void read_topology() {
-        FileReader file;
+    public void readTopology() {
         try {
-            file = new FileReader(TOPOLOGY_FILE);
-            BufferedReader reader = new BufferedReader(file);
-            String line = null;
+            File folder = new File(TOPOLOGY_DIR);
+            File[] topologyFiles = folder.listFiles();
 
-            try {
-                while ((line = reader.readLine()) != null) {
-                    String _line[] = line.split(",");
-                    Node parent = new Node(_line[0]);
-                    Node child = new Node(_line[1]);
+            for (int i = 0; i < topologyFiles.length; i++) {
+                FileReader file = new FileReader(topologyFiles[i]);
+                BufferedReader reader = new BufferedReader(file);
+                String line = null;
+                Node root = new Node(ROOT_NODE);
+                String topologyName = topologyFiles[i].getName();
 
-                    parent.addChildren(child);
-                    root.addChildren(parent);
-                    root.addChildren(child);
+                if (_topologies.containsKey(topologyName)
+                    || topologyName.startsWith(".")) {
+                    continue;
                 }
 
-                reader.close();
-            } catch (IOException e) {
-                e.printStackTrace();
+                try {
+                    while ((line = reader.readLine()) != null) {
+                        String _line[] = line.split(",");
+                        Node parent = new Node(_line[0]);
+                        Node child = new Node(_line[1]);
+
+                        parent.addChildren(child);
+                        root.addChildren(parent);
+                        root.addChildren(child);
+                    }
+
+                    reader.close();
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+
+                Topology newTopology = new Topology(topologyName, root);
+                _topologies.put(topologyName, newTopology);
             }
         } catch (FileNotFoundException e) {
             e.printStackTrace();
         }
+    }
+
+    public void main(String[] args) {
+        readTopology();
     }
 }
