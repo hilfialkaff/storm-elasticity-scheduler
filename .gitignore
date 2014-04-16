@@ -6,3 +6,4 @@ target/
 storm_network_scheduler.iml
 *.nfs*
 src/jvm/storm/scheduler/metrics/*
+config
