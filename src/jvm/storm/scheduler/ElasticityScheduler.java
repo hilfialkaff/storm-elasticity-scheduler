@@ -31,7 +31,7 @@ import backtype.storm.scheduler.WorkerSlot;
 
 /**
  * Put the following config in <code>nimbus</code>'s <code>storm.yaml</code>:
- * 
+ *
  * <pre>
  *     # tell nimbus to use this custom scheduler
  *     storm.scheduler: "storm.scheduler.ElasticityScheduler"
@@ -62,7 +62,6 @@ public class ElasticityScheduler implements IScheduler {
         try {
             Process proc = Runtime.getRuntime().exec(
                 PROJECT_DIR + SCRIPT_DIR + "get_metrics.sh /");
-
         } catch (IOException e) {
             System.out.println(e.getMessage());
         }
