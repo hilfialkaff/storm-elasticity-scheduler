@@ -31,7 +31,7 @@ import backtype.storm.scheduler.WorkerSlot;
 
 /**
  * Put the following config in <code>nimbus</code>'s <code>storm.yaml</code>:
- *
+ * 
  * <pre>
  *     # tell nimbus to use this custom scheduler
  *     storm.scheduler: "storm.scheduler.ElasticityScheduler"
@@ -50,6 +50,8 @@ public class ElasticityScheduler implements IScheduler {
     private static HashMap<String, Topology> _topologies = new HashMap<String, Topology>();
     private static int _numMachines = 0;
 
+    private final int TopologyStart = 0;
+
     @Override
     public void prepare(Map conf) {
         /**
@@ -59,69 +61,65 @@ public class ElasticityScheduler implements IScheduler {
          * (IOException e){ System.err.println("Caught IOException: " +
          * e.getMessage()); }
          **/
-        try {
-            Process proc = Runtime.getRuntime().exec(
-                PROJECT_DIR + SCRIPT_DIR + "get_metrics.sh /");
-        } catch (IOException e) {
-            System.out.println(e.getMessage());
-        }
     }
 
     @Override
     public void schedule(Topologies topologies, Cluster cluster) {
+        // parseData(PROJECT_DIR + METRIC_FILE);
+        // readTopology();
         ArrayList<String> topologyToDelete = new ArrayList<String>();
-
-        parseData(PROJECT_DIR + METRIC_FILE);
-        readTopology();
-
+        System.out.println("cluster.getSupervisors().size(): "
+            + Integer.toString(cluster.getSupervisors().size())
+            + " _numMachines: " + Integer.toString(_numMachines));
         if (cluster.getSupervisors().size() == _numMachines) {
             return;
-        }
+        } else {
+            for (Entry<String, Topology> topoEntry : _topologies.entrySet()) {
+                TopologyDetails topology = topologies.getByName(topoEntry
+                    .getKey());
 
-        for (Entry<String, Topology> topoEntry : _topologies.entrySet()) {
-            TopologyDetails topology = topologies.getByName(topoEntry.getKey());
-
-            // Topology doesn't exist anymore -> remove from database, else
-            // schedule
-            if (topology == null) {
-                topologyToDelete.add(topoEntry.getKey());
-            } else {
-                boolean needsScheduling = cluster.needsScheduling(topology);
-
-                if (!needsScheduling) {
-                    Log.info("Our topology DOES NOT NEED scheduling.");
+                // Topology doesn't exist anymore -> remove from database, else
+                // schedule
+                if (topology == null) {
+                    topologyToDelete.add(topoEntry.getKey());
                 } else {
-                    System.out.println("Our topology needs scheduling.");
-                    // find out all the needs-scheduling components of this
-                    // topology
-                    Map<String, List<ExecutorDetails>> componentToExecutors = cluster
-                        .getNeedsSchedulingComponentToExecutors(topology);
+                    boolean needsScheduling = cluster.needsScheduling(topology);
 
-                    Log.info("needs scheduling(component->executor): "
-                        + componentToExecutors);
-                    Log.info("needs scheduling(executor->components): "
-                        + cluster
-                            .getNeedsSchedulingExecutorToComponents(topology));
-                    SchedulerAssignment currentAssignment = cluster
-                        .getAssignmentById(topology.getId());
-                    if (currentAssignment != null) {
-                        Log.info("current assignments: "
-                            + currentAssignment.getExecutorToSlot());
+                    if (!needsScheduling) {
+                        Log.info("Our topology DOES NOT NEED scheduling.");
                     } else {
-                        Log.info("current assignments: {}");
-                    }
+                        System.out.println("Our topology needs scheduling.");
+                        // find out all the needs-scheduling components of this
+                        // topology
+                        Map<String, List<ExecutorDetails>> componentToExecutors = cluster
+                            .getNeedsSchedulingComponentToExecutors(topology);
 
-                    Collection<SupervisorDetails> supervisors = cluster
-                        .getSupervisors().values();
-                    _numMachines = supervisors.size();
+                        Log.info("needs scheduling(component->executor): "
+                            + componentToExecutors);
+                        Log.info("needs scheduling(executor->components): "
+                            + cluster
+                                .getNeedsSchedulingExecutorToComponents(topology));
+                        SchedulerAssignment currentAssignment = cluster
+                            .getAssignmentById(topology.getId());
+                        if (currentAssignment != null) {
+                            Log.info("current assignments: "
+                                + currentAssignment.getExecutorToSlot());
+                        } else {
+                            Log.info("current assignments: {}");
+                        }
 
-                    for (SupervisorDetails supervisor : supervisors) {
-                        Map meta = (Map) supervisor.getSchedulerMeta();
+                        Collection<SupervisorDetails> supervisors = cluster
+                            .getSupervisors().values();
+                        _numMachines = supervisors.size();
 
-                        List<WorkerSlot> availableSlots = cluster
-                            .getAvailableSlots(supervisor);
-                        for (WorkerSlot slot : availableSlots) {
-                            LOG.info("Slot: " + slot.getPort());
+                        for (SupervisorDetails supervisor : supervisors) {
+                            Map meta = (Map) supervisor.getSchedulerMeta();
+
+                            List<WorkerSlot> availableSlots = cluster
+                                .getAvailableSlots(supervisor);
+                            for (WorkerSlot slot : availableSlots) {
+                                LOG.info("Slot: " + slot.getPort());
+                            }
                         }
                     }
                 }
@@ -135,6 +133,176 @@ public class ElasticityScheduler implements IScheduler {
 
         // Use EvenScheduler for the rest
         new EvenScheduler().schedule(topologies, cluster);
+        // testSchedule(topologies, cluster);
+        // testMigrate(topologies, cluster);
+
+    }
+
+    public void testMigrate(Topologies topologies, Cluster cluster) {
+        System.out.println("/******start testMigrate********/");
+        System.out.println("num of topologies: "
+            + Integer.toString(_topologies.size()));
+        if (_topologies.size() > 0) {
+            for (Entry<String, Topology> topoEntry : _topologies.entrySet()) {
+                TopologyDetails topology = topologies.getByName(topoEntry
+                    .getKey());
+                System.out.println("topology: " + topoEntry.getKey());
+
+                Map<String, List<ExecutorDetails>> componentToExecutors = cluster
+                    .getNeedsSchedulingComponentToExecutors(topology);
+                List<SupervisorDetails> visors = new ArrayList<SupervisorDetails>();
+                Collection<SupervisorDetails> supervisors = cluster
+                    .getSupervisors().values();
+                SupervisorDetails specialSupervisor = null;
+                // System.out.println("Number of supervisors: "
+                // + Integer.toString(supervisors.size()));
+                for (SupervisorDetails supervisor : supervisors) {
+                    Map meta = (Map) supervisor.getSchedulerMeta();
+                    // System.out.println("Supervisor name: " + supervisor +
+                    // "\n");
+                    // System.out.println("id: " + supervisor.getId() +
+                    // " host: "
+                    // + supervisor.getHost());
+                    visors.add(supervisor);
+                }
+                List<ExecutorDetails> executors = componentToExecutors
+                    .get("special-spout");
+
+                List<WorkerSlot> availableSlots = cluster
+                    .getAvailableSlots(visors.get(0));
+                if (availableSlots.isEmpty() && !executors.isEmpty()) {
+                    for (Integer port : cluster.getUsedPorts(visors.get(0))) {
+                        cluster.freeSlot(new WorkerSlot(specialSupervisor
+                            .getId(), port));
+                    }
+                }
+                SchedulerAssignment currentAssignment = cluster
+                    .getAssignmentById(topologies.getByName(topoEntry.getKey())
+                        .getId());
+                System.out.println("executors for spout_0"
+                    + currentAssignment.getExecutors());
+                Iterator iter = currentAssignment.getExecutors().iterator();
+                ExecutorDetails e = (ExecutorDetails) iter.next();
+
+                removeTask(topology, cluster, e);
+
+                List<ExecutorDetails> task = new ArrayList<ExecutorDetails>();
+                task.add(e);
+
+                if (visors.size() > 1) {
+                    List<WorkerSlot> slots1 = cluster.getAvailableSlots(visors
+                        .get(0));
+                    List<WorkerSlot> slots2 = cluster.getAvailableSlots(visors
+                        .get(1));
+                    if (e.getStartTask() % 2 == 0) {
+                        cluster.assign(slots2.get(0), topology.getId(), task);
+                        System.out.println("We assigned executors:" + task
+                            + " to slot: [" + slots2.get(0).getNodeId() + ", "
+                            + slots2.get(0).getPort() + "]");
+                    } else {
+                        cluster.assign(slots1.get(0), topology.getId(), task);
+                        System.out.println("We assigned executors:" + task
+                            + " to slot: [" + slots1.get(0).getNodeId() + ", "
+                            + slots1.get(0).getPort() + "]");
+                    }
+
+                }
+            }
+
+        }
+        System.out.println("/******end testMigrate********/");
+    }
+
+    public void removeTask(TopologyDetails topology, Cluster cluster,
+        ExecutorDetails executor) {
+        System.out.println("/******start removeTask********/");
+        System.out.println("task to remove: " + executor);
+        SchedulerAssignment currentAssignment = cluster
+            .getAssignmentById(topology.getId());
+        // this.executorToSlot.remove(executor);
+        Map<ExecutorDetails, WorkerSlot> c = currentAssignment
+            .getExecutorToSlot();
+        c.remove(executor);
+        System.out.println("/******end removeTask********/");
+
+    }
+
+    public void testSchedule(Topologies topologies, Cluster cluster) {
+        for (Entry<String, Topology> topoEntry : _topologies.entrySet()) {
+            TopologyDetails topology = topologies.getByName(topoEntry.getKey());
+            if (topology != null) {
+                List<ExecutorDetails> oddTasks = new ArrayList<ExecutorDetails>();
+                List<ExecutorDetails> evenTasks = new ArrayList<ExecutorDetails>();
+
+                Map<String, List<ExecutorDetails>> componentToExecutors = cluster
+                    .getNeedsSchedulingComponentToExecutors(topology);
+
+                Iterator it = componentToExecutors.entrySet().iterator();
+                while (it.hasNext()) {
+                    Map.Entry pairs = (Map.Entry) it.next();
+                    // System.out.println("Key: "+pairs.getKey()+"\nValues:");
+                    List<ExecutorDetails> execList = (List<ExecutorDetails>) pairs
+                        .getValue();
+                    for (int i = 0; i < execList.size(); i++) {
+                        // System.out.println(execList.get(i));
+                        // System.out.println("start Task: "+Integer.toString(execList.get(i).getStartTask())+" end Task: "+Integer.toString(execList.get(i).getEndTask())+" String: "+execList.get(i).toString());
+
+                        if (execList.get(i).getStartTask() % 2 == 0) {
+                            evenTasks.add(execList.get(i));
+                        } else {
+                            oddTasks.add(execList.get(i));
+                        }
+                    }
+
+                }
+
+                // Log.info("needs scheduling(component->executor): "+
+                // componentToExecutors);
+                // Log.info("needs scheduling(executor->components): "+
+                // cluster.getNeedsSchedulingExecutorToComponents(topology));
+                SchedulerAssignment currentAssignment = cluster
+                    .getAssignmentById(topologies.getByName(topoEntry.getKey())
+                        .getId());
+                if (currentAssignment != null) {
+                    Log.info("current assignments: "
+                        + currentAssignment.getExecutorToSlot());
+                } else {
+                    Log.info("current assignments: {}");
+                }
+
+                List<SupervisorDetails> visors = new ArrayList<SupervisorDetails>();
+                Collection<SupervisorDetails> supervisors = cluster
+                    .getSupervisors().values();
+                SupervisorDetails specialSupervisor = null;
+                // System.out.println("Number of supervisors: "
+                // + Integer.toString(supervisors.size()));
+                for (SupervisorDetails supervisor : supervisors) {
+                    Map meta = (Map) supervisor.getSchedulerMeta();
+                    // System.out.println("Supervisor name: " + supervisor +
+                    // "\n");
+                    // System.out.println("id: " + supervisor.getId() +
+                    // " host: "
+                    // + supervisor.getHost());
+                    visors.add(supervisor);
+                }
+                if (visors.size() > 1) {
+                    List<WorkerSlot> slots1 = cluster.getAvailableSlots(visors
+                        .get(0));
+                    List<WorkerSlot> slots2 = cluster.getAvailableSlots(visors
+                        .get(1));
+                    cluster.assign(slots1.get(0), topology.getId(), evenTasks);
+                    System.out.println("We assigned executors:" + evenTasks
+                        + " to slot: [" + slots1.get(0).getNodeId() + ", "
+                        + slots1.get(0).getPort() + "]");
+                    cluster.assign(slots2.get(0), topology.getId(), oddTasks);
+                    System.out.println("We assigned executors:" + oddTasks
+                        + " to slot: [" + slots2.get(0).getNodeId() + ", "
+                        + slots2.get(0).getPort() + "]");
+                }
+
+            }
+        }
+
     }
 
     // Parse metric data
@@ -167,7 +335,7 @@ public class ElasticityScheduler implements IScheduler {
             try {
                 numCount = Integer.parseInt(splited[7]);
             } catch (Exception e) {
-                LOG.info(e.getMessage());
+                LOG.info("Exception: " + e.getMessage());
                 continue;
             }
 
