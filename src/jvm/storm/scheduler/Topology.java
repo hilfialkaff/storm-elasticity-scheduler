@@ -12,4 +12,8 @@ public class Topology {
     public Node getRoot() {
         return _root;
     }
+
+    public Node getNode(String name) {
+        return _root.getChildren(name);
+    }
 }
