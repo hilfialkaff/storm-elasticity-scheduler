@@ -38,14 +38,18 @@ public class ThriftExample {
                     for (ExecutorSummary executorSummary : executorSummaries) {
                         ExecutorStats executorStats = executorSummary
                             .getStats();
+                        if (executorStats == null) {
+                            System.out.println("NULL");
+                            continue;
+                        }
                         String host = executorSummary.getHost();
                         int port = executorSummary.getPort();
                         String componentId = executorSummary.getComponent_id();
                         Map<String, Map<String, Long>> transfer = executorStats
                             .getTransferred();
-
+  
                         System.out.println("executor <" + host + ',' + port
-                            + ',' + componentId + "> transferred: " + transfer);
+                            + ',' + componentId + "> transferred: " + transfer.get("600"));
                     }
                 }
 

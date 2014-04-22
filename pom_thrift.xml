@@ -2,11 +2,11 @@
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
   <modelVersion>4.0.0</modelVersion>
 
-  <groupId>storm_elasticity_scheduler</groupId>
-  <artifactId>storm_elasticity_scheduler</artifactId>
+  <groupId>storm_elasticity_thrift</groupId>
+  <artifactId>storm_elasticity_thrift</artifactId>
   <packaging>jar</packaging>
   <version>1.0.0-SNAPSHOT</version>
-  <name>storm_elasticity_scheduler</name>
+  <name>storm_elasticity_thrift</name>
 
   <properties>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
@@ -49,7 +49,7 @@
   </dependencies>
 
   <build>
-    <sourceDirectory>src/jvm/storm</sourceDirectory>
+    <sourceDirectory>src/jvm/thrift</sourceDirectory>
 
     <plugins>
       <!--

@@ -14,11 +14,15 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Scanner;
-
+import java.io.*;
+/*
 import org.apache.thrift.TException;
 import org.apache.thrift.protocol.TBinaryProtocol;
 import org.apache.thrift.transport.TFramedTransport;
 import org.apache.thrift.transport.TSocket;
+*/
+
+
 import org.mortbay.log.Log;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -48,32 +52,69 @@ import backtype.storm.scheduler.WorkerSlot;
  * </pre>
  */
 public class ElasticityScheduler implements IScheduler {
-    private static final Logger LOG = LoggerFactory
-        .getLogger(ElasticityScheduler.class);
+    private static final Logger LOG = LoggerFactory.getLogger(ElasticityScheduler.class);
     private static final String ROOT_NODE = "root";
     private static final String TOPOLOGY_DIR = "/proj/CS525/exp/stormCluster/project/storm-experiments/topologies/";
     private static final String NIMBUS_HOST = "node-1.stormcluster.cs525.emulab.net";
     private static final String INTERVAL = "600";
+    private static final int METRICS_RECV_PORT = 9005;
+    private static final String ELASTICITY_SCHEDULER_DIR = "/proj/CS525/exp/stormCluster/project/storm-elasticity-scheduler";
 
-    private TSocket _tsocket;
-    private TFramedTransport _tTransport;
-    private TBinaryProtocol _tBinaryProtocol;
+  //  private TSocket _tsocket;
+   // private TFramedTransport _tTransport;
+  //  private TBinaryProtocol _tBinaryProtocol;
     private Nimbus.Client _client;
     private static HashMap<String, Topology> _topologies = new HashMap<String, Topology>();
     private static int _numMachines = 0;
+    private server metrics_server;
+    private Process theProcess;
 
     @Override
     public void prepare(Map conf) {
-        _tsocket = new TSocket(NIMBUS_HOST, 6627);
-        _tTransport = new TFramedTransport(_tsocket);
-        _tBinaryProtocol = new TBinaryProtocol(_tTransport);
-        _client = new Nimbus.Client(_tBinaryProtocol);
-
-        try {
-            _tTransport.open();
-        } catch (TException e) {
-            e.printStackTrace();
-        }
+        /*
+         * _tsocket = new TSocket("localhost", 6627); _tTransport = new
+         * TFramedTransport(_tsocket); _tBinaryProtocol = new
+         * TBinaryProtocol(_tTransport); _client = new
+         * Nimbus.Client(_tBinaryProtocol);
+         * 
+         * try { _tTransport.open(); } catch (TException e) {
+         * e.printStackTrace(); }
+         */
+    	
+    	this.metrics_server = new server(METRICS_RECV_PORT);
+		this.metrics_server.start();
+		System.out.println("Server Successfully started!!");
+		
+		Process theProcess = null;
+	      BufferedReader inStream = null;
+	     
+	      /*
+		 try
+	      {
+			 String command = "java -cp "+ELASTICITY_SCHEDULER_DIR+"/target/storm_elasticity_thrift-1.0.0-SNAPSHOT-jar-with-dependencies.jar storm.scheduler.ThriftMetrics";
+			System.out.println("Starting Metrics client routine..."); 
+			this.theProcess = Runtime.getRuntime().exec("java -cp "+ELASTICITY_SCHEDULER_DIR+"/target/storm_elasticity_thrift-1.0.0-SNAPSHOT-jar-with-dependencies.jar storm.scheduler.ThriftMetrics");
+			System.out.println("Metrics client routine started...");
+	          //java -cp target/storm_elasticity_thrift-1.0.0-SNAPSHOT-jar-with-dependencies.jar storm.scheduler.ThriftMetrics
+	      }
+	      catch(IOException e)
+	      {
+	         System.err.println("Error on exec() method");
+	         e.printStackTrace();  
+	      }
+		 
+		 try
+	      {
+	         inStream = new BufferedReader(new InputStreamReader( this.theProcess.getInputStream() ));  
+	         System.out.println(inStream.readLine());
+	      }
+	      catch(IOException e)
+	      {
+	         System.err.println("Error on inStream.readLine()");
+	         e.printStackTrace();  
+	      }
+		*/
+		
     }
 
     public void printCurTopology(Cluster cluster, TopologyDetails topology) {
@@ -107,14 +148,16 @@ public class ElasticityScheduler implements IScheduler {
 
     public void _schedule(Topologies topologies, Cluster cluster) {
     }
-
+    
     @Override
     public void schedule(Topologies topologies, Cluster cluster) {
+    	//System.out.println("IN schedule!!!");
+    	
         ArrayList<String> topologyToDelete = new ArrayList<String>();
         int numSupervisor = cluster.getSupervisors().size();
-
-        updateMetrics();
-        readTopology();
+        
+         updateMetrics();
+         readTopology();
 
         if (_numMachines != numSupervisor) {
             System.out.println("Old supervisor: " + _numMachines + " new: "
@@ -156,6 +199,18 @@ public class ElasticityScheduler implements IScheduler {
     }
 
     public void updateMetrics() {
+    	
+    	
+    	while(this.metrics_server.MsgQueue.size()>0)
+    	{
+    		String data = this.metrics_server.getMsg();
+    		String[] metrics = data.split(",");
+    		System.out.println("ID: "+metrics[0] + " Metric: "+metrics[1]);
+    		//Node node = topology.getNode(transferPair.getKey());
+            //node.setThroughput(transferPair.getValue()
+                //.get(INTERVAL));
+    	}
+/*
         try {
             ClusterSummary clusterSummary = _client.getClusterInfo();
             List<TopologySummary> topologies = clusterSummary.getTopologies();
@@ -191,6 +246,7 @@ public class ElasticityScheduler implements IScheduler {
         } catch (TException e) {
             e.printStackTrace();
         }
+*/
     }
 
     public void testMigrate(Topologies topologies, Cluster cluster) {
