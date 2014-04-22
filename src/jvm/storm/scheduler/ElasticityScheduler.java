@@ -15,20 +15,10 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Scanner;
 
-import org.apache.thrift.TException;
-import org.apache.thrift.protocol.TBinaryProtocol;
-import org.apache.thrift.transport.TFramedTransport;
-import org.apache.thrift.transport.TSocket;
 import org.mortbay.log.Log;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import backtype.storm.generated.ClusterSummary;
-import backtype.storm.generated.ExecutorStats;
-import backtype.storm.generated.ExecutorSummary;
-import backtype.storm.generated.Nimbus;
-import backtype.storm.generated.TopologyInfo;
-import backtype.storm.generated.TopologySummary;
 import backtype.storm.scheduler.Cluster;
 import backtype.storm.scheduler.EvenScheduler;
 import backtype.storm.scheduler.ExecutorDetails;
@@ -52,28 +42,16 @@ public class ElasticityScheduler implements IScheduler {
         .getLogger(ElasticityScheduler.class);
     private static final String ROOT_NODE = "root";
     private static final String TOPOLOGY_DIR = "/proj/CS525/exp/stormCluster/project/storm-experiments/topologies/";
-    private static final String NIMBUS_HOST = "node-1.stormcluster.cs525.emulab.net";
+    // private static final String NIMBUS_HOST =
+    // "node-1.stormcluster.cs525.emulab.net";
+    private static final String NIMBUS_HOST = "127.0.0.1";
     private static final String INTERVAL = "600";
 
-    private TSocket _tsocket;
-    private TFramedTransport _tTransport;
-    private TBinaryProtocol _tBinaryProtocol;
-    private Nimbus.Client _client;
     private static HashMap<String, Topology> _topologies = new HashMap<String, Topology>();
     private static int _numMachines = 0;
 
     @Override
     public void prepare(Map conf) {
-        _tsocket = new TSocket(NIMBUS_HOST, 6627);
-        _tTransport = new TFramedTransport(_tsocket);
-        _tBinaryProtocol = new TBinaryProtocol(_tTransport);
-        _client = new Nimbus.Client(_tBinaryProtocol);
-
-        try {
-            _tTransport.open();
-        } catch (TException e) {
-            e.printStackTrace();
-        }
     }
 
     public void printCurTopology(Cluster cluster, TopologyDetails topology) {
@@ -106,6 +84,7 @@ public class ElasticityScheduler implements IScheduler {
     }
 
     public void _schedule(Topologies topologies, Cluster cluster) {
+
     }
 
     @Override
@@ -156,41 +135,6 @@ public class ElasticityScheduler implements IScheduler {
     }
 
     public void updateMetrics() {
-        try {
-            ClusterSummary clusterSummary = _client.getClusterInfo();
-            List<TopologySummary> topologies = clusterSummary.getTopologies();
-
-            for (TopologySummary topo : topologies) {
-                TopologyInfo topologyInfo = _client.getTopologyInfo(topo
-                    .getId());
-                List<ExecutorSummary> executorSummaries = topologyInfo
-                    .getExecutors();
-                Topology topology = _topologies.get(topo.getName());
-
-                for (ExecutorSummary executorSummary : executorSummaries) {
-                    ExecutorStats executorStats = executorSummary.getStats();
-                    String componentId = executorSummary.getComponent_id();
-                    Map<String, Map<String, Long>> transfer = executorStats
-                        .getTransferred();
-
-                    if (componentId.startsWith("__")) {
-                        continue;
-                    }
-
-                    for (Entry<String, Map<String, Long>> transferPair : transfer
-                        .entrySet()) {
-                        Node node = topology.getNode(transferPair.getKey());
-                        node.setThroughput(transferPair.getValue()
-                            .get(INTERVAL));
-
-                        LOG.info("Setting node: " + node.getName()
-                            + " throughput to :" + node.getThroughput());
-                    }
-                }
-            }
-        } catch (TException e) {
-            e.printStackTrace();
-        }
     }
 
     public void testMigrate(Topologies topologies, Cluster cluster) {
