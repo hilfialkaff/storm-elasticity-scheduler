@@ -15,24 +15,11 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Scanner;
 import java.io.*;
-/*
-import org.apache.thrift.TException;
-import org.apache.thrift.protocol.TBinaryProtocol;
-import org.apache.thrift.transport.TFramedTransport;
-import org.apache.thrift.transport.TSocket;
-*/
-
 
 import org.mortbay.log.Log;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import backtype.storm.generated.ClusterSummary;
-import backtype.storm.generated.ExecutorStats;
-import backtype.storm.generated.ExecutorSummary;
-import backtype.storm.generated.Nimbus;
-import backtype.storm.generated.TopologyInfo;
-import backtype.storm.generated.TopologySummary;
 import backtype.storm.scheduler.Cluster;
 import backtype.storm.scheduler.EvenScheduler;
 import backtype.storm.scheduler.ExecutorDetails;
@@ -55,15 +42,13 @@ public class ElasticityScheduler implements IScheduler {
     private static final Logger LOG = LoggerFactory.getLogger(ElasticityScheduler.class);
     private static final String ROOT_NODE = "root";
     private static final String TOPOLOGY_DIR = "/proj/CS525/exp/stormCluster/project/storm-experiments/topologies/";
-    private static final String NIMBUS_HOST = "node-1.stormcluster.cs525.emulab.net";
+    // private static final String NIMBUS_HOST =
+    // "node-1.stormcluster.cs525.emulab.net";
+    private static final String NIMBUS_HOST = "127.0.0.1";
     private static final String INTERVAL = "600";
     private static final int METRICS_RECV_PORT = 9005;
     private static final String ELASTICITY_SCHEDULER_DIR = "/proj/CS525/exp/stormCluster/project/storm-elasticity-scheduler";
 
-  //  private TSocket _tsocket;
-   // private TFramedTransport _tTransport;
-  //  private TBinaryProtocol _tBinaryProtocol;
-    private Nimbus.Client _client;
     private static HashMap<String, Topology> _topologies = new HashMap<String, Topology>();
     private static int _numMachines = 0;
     private server metrics_server;
@@ -71,16 +56,6 @@ public class ElasticityScheduler implements IScheduler {
 
     @Override
     public void prepare(Map conf) {
-        /*
-         * _tsocket = new TSocket("localhost", 6627); _tTransport = new
-         * TFramedTransport(_tsocket); _tBinaryProtocol = new
-         * TBinaryProtocol(_tTransport); _client = new
-         * Nimbus.Client(_tBinaryProtocol);
-         * 
-         * try { _tTransport.open(); } catch (TException e) {
-         * e.printStackTrace(); }
-         */
-    	
     	this.metrics_server = new server(METRICS_RECV_PORT);
 		this.metrics_server.start();
 		System.out.println("Server Successfully started!!");
@@ -147,6 +122,7 @@ public class ElasticityScheduler implements IScheduler {
     }
 
     public void _schedule(Topologies topologies, Cluster cluster) {
+
     }
     
     @Override
@@ -199,8 +175,6 @@ public class ElasticityScheduler implements IScheduler {
     }
 
     public void updateMetrics() {
-    	
-    	
     	while(this.metrics_server.MsgQueue.size()>0)
     	{
     		String data = this.metrics_server.getMsg();

@@ -4,14 +4,15 @@ import java.util.HashMap;
 
 // TODO: 1 task per bolt
 public class Node {
-    private String _name;
-    private HashMap<String, Node> _children;
+    private final String _name;
+    private final HashMap<String, Node> _children;
+    private final HashMap<String, Double> _tasks;
     private double _throughput;
 
     public Node(String name) {
         _name = name;
         _children = new HashMap<String, Node>();
-        _throughput = 0.0;
+        _tasks = new HashMap<String, Double>();
     }
 
     public String getName() {
