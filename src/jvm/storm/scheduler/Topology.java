@@ -27,6 +27,10 @@ public class Topology {
         return ret;
     }
 
+    public HashMap<String, Node> getNodes() {
+        return _nodes;
+    }
+
     public Node getNodeByTask(String taskName) {
         Node ret = null;
 

@@ -81,4 +81,8 @@ public class Node {
 
         return ret;
     }
+
+    public HashMap<String, Double> getTasks() {
+        return _tasks;
+    }
 }

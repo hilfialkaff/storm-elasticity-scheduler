@@ -52,6 +52,18 @@ public class ElasticityScheduler implements IScheduler {
     public void prepare(Map conf) {
     }
 
+    public void printOurTopology() {
+        for (Topology topology : _topologies.values()) {
+            HashMap<String, Node> nodes = topology.getNodes();
+
+            LOG.info("Topology: " + topology.getName());
+            for (Node node : nodes.values()) {
+                LOG.info("Node " + node.getName() + " has throughput"
+                    + node.getTasks());
+            }
+        }
+    }
+
     public void printCurTopology(Cluster cluster, TopologyDetails topology) {
         Map<String, List<ExecutorDetails>> componentToExecutors = cluster
             .getNeedsSchedulingComponentToExecutors(topology);
@@ -199,18 +211,20 @@ public class ElasticityScheduler implements IScheduler {
         ArrayList<String> topologyToDelete = new ArrayList<String>();
         int numSupervisor = cluster.getSupervisors().size();
 
-        updateMetrics();
         readTopology();
+        updateMetrics();
 
-        if (_numMachines != numSupervisor) {
-            System.out.println("Old supervisor: " + _numMachines + " new: "
-                + numSupervisor);
-            _numMachines = numSupervisor;
+        printOurTopology();
 
-            _schedule(topologies, cluster);
-        }
-
-        _schedule(topologies, cluster);
+        // if (_numMachines != numSupervisor) {
+        // System.out.println("Old supervisor: " + _numMachines + " new: "
+        // + numSupervisor);
+        // _numMachines = numSupervisor;
+        //
+        // _schedule(topologies, cluster);
+        // }
+        //
+        // _schedule(topologies, cluster);
 
         // for (Entry<String, Topology> topoEntry : _topologies.entrySet()) {
         // TopologyDetails topology = topologies.getByName(topoEntry.getKey());
