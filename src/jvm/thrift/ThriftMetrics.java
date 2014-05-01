@@ -44,13 +44,26 @@ public class ThriftMetrics extends Thread{
 	                ClusterSummary clusterSummary = client.getClusterInfo();
 	                List<TopologySummary> topologies = clusterSummary
 	                    .getTopologies();
+	                
+	                
+	                
 	                for (TopologySummary topo : topologies) {
-	                    TopologyInfo topologyInfo = client.getTopologyInfo(topo
+	                    TopologyInfo topologyInfo = null;
+				try
+				{             	
+	                    topologyInfo = client.getTopologyInfo(topo
 	                        .getId());
+				}
+			    catch(Exception e){
+				System.out.println(e);
+				continue;
+			}
 	                    List<ExecutorSummary> executorSummaries = topologyInfo
 	                        .getExecutors();
 
+	                    
 	                    for (ExecutorSummary executorSummary : executorSummaries) {
+	                    	
 	                        ExecutorStats executorStats = executorSummary
 	                            .getStats();
 	                        if (executorStats == null) {
@@ -60,13 +73,26 @@ public class ThriftMetrics extends Thread{
 	                        String host = executorSummary.getHost();
 	                        int port = executorSummary.getPort();
 	                        String componentId = executorSummary.getComponent_id();
+	                        
+	                        
+	                        //System.out.println("task_id: "+Integer.toString(executorSummary.getExecutor_info().getTask_start()));
+	                        
+	                        
+	                        String taskId = Integer.toString(executorSummary.getExecutor_info().getTask_start());
+	                       
 	                        Map<String, Map<String, Long>> transfer = executorStats
 	                            .getTransferred();
 	                        
+	                        
 	                        if(transfer.get("600").get("default")!=null)
 	                        {
+
+					System.out.println((host + ':' + port
+                                            + ':' + componentId +":"+topo
+                                        .getId()+":"+taskId+"," + transfer.get("600").get("default")));
 		                        this.metrics_send_client.addMsg(host + ':' + port
-		                            + ':' + componentId + "," + transfer.get("600").get("default"));
+		                            + ':' + componentId +":"+topo
+	    	                        .getId()+":"+taskId+"," + transfer.get("600").get("default"));
 	                        }
 	  /*
 	                        System.out.println("executor <" + host + ',' + port

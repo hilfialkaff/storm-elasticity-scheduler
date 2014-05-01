@@ -2,7 +2,6 @@ package storm.scheduler;
 
 import java.io.BufferedReader;
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.IOException;
@@ -92,6 +91,20 @@ public class ElasticityScheduler implements IScheduler {
 		
     }
 
+    public void printOurTopology() {
+        LOG.info("HERE");
+
+        for (Topology topology : _topologies.values()) {
+            HashMap<String, Node> nodes = topology.getNodes();
+
+            LOG.info("Topology: " + topology.getName());
+            for (Node node : nodes.values()) {
+                LOG.info("Node " + node.getName() + " has throughput"
+                    + node.getTasks());
+            }
+        }
+    }
+
     public void printCurTopology(Cluster cluster, TopologyDetails topology) {
         Map<String, List<ExecutorDetails>> componentToExecutors = cluster
             .getNeedsSchedulingComponentToExecutors(topology);
@@ -121,46 +134,177 @@ public class ElasticityScheduler implements IScheduler {
         }
     }
 
+    /* TODO: Currently only assume one topology */
     public void _schedule(Topologies topologies, Cluster cluster) {
+        for (Topology topology : _topologies.values()) {
+            TopologyDetails topologyDetails = topologies.getByName(topology.getName());
 
+	        if(topologyDetails == null) {
+	            continue;
+	        }
+
+            HashMap<String, Supervisor> supervisors = new HashMap<String, Supervisor>();
+            SchedulerAssignment currentAssignment = cluster
+                .getAssignmentById(topologyDetails.getId());
+            Collection<SupervisorDetails> clusterSupervisors = cluster
+                .getSupervisors().values();
+            double avgThroughput = 0.0;
+
+            if (currentAssignment == null) {
+                /* Leaving this for EvenScheduler */
+                Log.info("current assignments: {}");
+                return;
+            }
+            
+            Log.info("current assignments: "
+                + currentAssignment.getExecutorToSlot());
+            Map<ExecutorDetails, WorkerSlot> executorMap = currentAssignment
+                .getExecutorToSlot();
+
+            /* TODO: Assume there is only one task */
+            for (Entry<ExecutorDetails, WorkerSlot> executorEntry : executorMap
+                .entrySet()) {
+                ExecutorDetails executorDetails = executorEntry.getKey();
+                String startTask = Integer.toString(executorDetails
+                    .getStartTask());
+                String supervisorName = executorEntry.getValue()
+                    .getNodeId();
+                Supervisor supervisor;
+                Node node=null;
+                double throughput;
+
+                if (!supervisors.containsKey(supervisorName)) {
+                    supervisor = new Supervisor(supervisorName);
+                    supervisors.put(supervisorName, supervisor);
+                } else {
+                    supervisor = supervisors.get(supervisorName);
+                }
+		    
+                node = topology.getNodeByTask(startTask);
+
+		        if(node == null) {
+                    continue;
+                }
+
+                throughput = node.getTaskBandwidth(startTask);
+                supervisor.addTask(executorDetails, throughput);
+			
+            }
+
+			for (Node node1 : topology.getNodes().values()) {
+				LOG.info("node id: " + node1.getName() + "tasks:" + node1.getTasks());
+
+            }
+
+            ArrayList<ExecutorDetails> tasksToMigrate = new ArrayList<ExecutorDetails>();
+            avgThroughput = computeAvgThroughput(supervisors);
+            double throughputToMigrate = avgThroughput * supervisors.size()
+                / clusterSupervisors.size();
+            double migratedThroughput = 0.0;
+
+            /* Find which tasks to migrate */
+            for (Supervisor supervisor : supervisors.values()) {
+                HashMap<ExecutorDetails, Double> curTasks = supervisor
+                    .getTasks();
+                double bestThroughput = 0.0;
+                ExecutorDetails bestTask = new ExecutorDetails(0, 0);
+
+                for (Entry<ExecutorDetails, Double> taskDetails : curTasks
+                    .entrySet()) {
+                    double throughput = taskDetails.getValue();
+                    ExecutorDetails task = taskDetails.getKey();
+                    LOG.info("throughput:" + throughput + " best:" + bestThroughput + " migrated:" + migratedThroughput + " needed:" + throughputToMigrate);
+
+                    if (throughput > bestThroughput && (migratedThroughput + throughput) 
+                        < throughputToMigrate) {
+                        bestThroughput = throughput;
+                        bestTask = task;
+                    }
+                }
+
+                if (bestThroughput == 0.0) {
+                    continue;
+                }
+
+                tasksToMigrate.add(bestTask);
+            }
+
+            /* Migrate to new supervisors */
+            for (SupervisorDetails clusterSupervisor : clusterSupervisors) {
+                String hostname = clusterSupervisor.getId();
+                Supervisor supervisor = supervisors.get(hostname);
+                
+                /* It has been scheduled previously */
+                if (supervisor != null) {
+                    continue;
+                }
+
+                List<WorkerSlot> availableSlots = cluster
+                    .getAvailableSlots(clusterSupervisor);
+                int numSlots = availableSlots.size();
+
+                LOG.info("tasksToMigrate" + tasksToMigrate);
+
+                for (int i = 0; i < numSlots; i++) {
+                    WorkerSlot slot = availableSlots.get(i);
+                    List<ExecutorDetails> tasks = tasksToMigrate.subList(i
+                        / numSlots * tasksToMigrate.size(), (i + 1) / numSlots
+                        * tasksToMigrate.size());
+                        
+                    migrateTasks(topologyDetails, cluster, tasks, slot);
+                }
+             }
+        }
     }
-    
+
+    public double computeAvgThroughput(HashMap<String, Supervisor> supervisors) {
+        double throughput = 0.0;
+
+        for (Supervisor supervisor : supervisors.values()) {
+            throughput += supervisor.computeThroughput();
+        }
+
+        return throughput / supervisors.size();
+    }
+
     @Override
     public void schedule(Topologies topologies, Cluster cluster) {
-    	//System.out.println("IN schedule!!!");
-    	
         ArrayList<String> topologyToDelete = new ArrayList<String>();
         int numSupervisor = cluster.getSupervisors().size();
-        
-         updateMetrics();
-         readTopology();
 
-        if (_numMachines != numSupervisor) {
-            System.out.println("Old supervisor: " + _numMachines + " new: "
-                + numSupervisor);
-            _numMachines = numSupervisor;
+        readTopology();
+        updateMetrics();
 
-            _schedule(topologies, cluster);
-        }
+        printOurTopology();
 
-        for (Entry<String, Topology> topoEntry : _topologies.entrySet()) {
-            TopologyDetails topology = topologies.getByName(topoEntry.getKey());
+        // if (_numMachines != numSupervisor) {
+        // System.out.println("Old supervisor: " + _numMachines + " new: "
+        // + numSupervisor);
+        // _numMachines = numSupervisor;
+        //
+        // _schedule(topologies, cluster);
+        // }
+        //
+        _schedule(topologies, cluster);
 
-            // Topology doesn't exist anymore -> remove from database, else
-            // schedule
-            if (topology == null) {
-                topologyToDelete.add(topoEntry.getKey());
-            } else {
-                boolean needsScheduling = cluster.needsScheduling(topology);
-
-                if (!needsScheduling) {
-                    Log.info("Our topology DOES NOT NEED scheduling.");
-                } else {
-                    /* Default scheduling for now */
-                    printCurTopology(cluster, topology);
-                }
-            }
-        }
+        // for (Entry<String, Topology> topoEntry : _topologies.entrySet()) {
+        // TopologyDetails topology = topologies.getByName(topoEntry.getKey());
+        //
+        // // Topology doesn't exist anymore -> remove from database, else
+        // // schedule
+        // if (topology == null) {
+        // topologyToDelete.add(topoEntry.getKey());
+        // } else {
+        // boolean needsScheduling = cluster.needsScheduling(topology);
+        //
+        // if (!needsScheduling) {
+        // Log.info("Our topology DOES NOT NEED scheduling.");
+        // } else {
+        // /* Default scheduling for now */
+        // printCurTopology(cluster, topology);
+        // }
+        // }
+        // }
 
         /* Delete non-existant topologies */
         for (String s : topologyToDelete) {
@@ -175,52 +319,88 @@ public class ElasticityScheduler implements IScheduler {
     }
 
     public void updateMetrics() {
-    	while(this.metrics_server.MsgQueue.size()>0)
+while(this.metrics_server.MsgQueue.size()>0)
     	{
     		String data = this.metrics_server.getMsg();
     		String[] metrics = data.split(",");
-    		System.out.println("ID: "+metrics[0] + " Metric: "+metrics[1]);
-    		//Node node = topology.getNode(transferPair.getKey());
-            //node.setThroughput(transferPair.getValue()
-                //.get(INTERVAL));
-    	}
-/*
-        try {
-            ClusterSummary clusterSummary = _client.getClusterInfo();
-            List<TopologySummary> topologies = clusterSummary.getTopologies();
-
-            for (TopologySummary topo : topologies) {
-                TopologyInfo topologyInfo = _client.getTopologyInfo(topo
-                    .getId());
-                List<ExecutorSummary> executorSummaries = topologyInfo
-                    .getExecutors();
-                Topology topology = _topologies.get(topo.getName());
-
-                for (ExecutorSummary executorSummary : executorSummaries) {
-                    ExecutorStats executorStats = executorSummary.getStats();
-                    String componentId = executorSummary.getComponent_id();
-                    Map<String, Map<String, Long>> transfer = executorStats
-                        .getTransferred();
-
-                    if (componentId.startsWith("__")) {
-                        continue;
-                    }
-
-                    for (Entry<String, Map<String, Long>> transferPair : transfer
-                        .entrySet()) {
-                        Node node = topology.getNode(transferPair.getKey());
-                        node.setThroughput(transferPair.getValue()
-                            .get(INTERVAL));
-
-                        LOG.info("Setting node: " + node.getName()
-                            + " throughput to :" + node.getThroughput());
-                    }
-                }
-            }
-        } catch (TException e) {
-            e.printStackTrace();
-        }
-*/
+    		
+    		
+    		String[] id_tokens = metrics[0].split(":");
+    		
+    		String host = id_tokens[0];
+    		String port = id_tokens[1];
+    		String component_id = id_tokens[2];
+    		String topology_id_full = id_tokens[3];
+    		String topology_id = id_tokens[3].split("-")[0];
+    		String task_id = id_tokens[4];
+    		
+    		/*
+    		List<String> task_ids=new ArrayList();
+    		
+    		
+    		Map<ExecutorDetails, String> mapping =  topologies.getById(topology_id_full).getExecutorToComponent();
+    		
+    		for (Entry<ExecutorDetails, String> execEntry : mapping.entrySet())
+    		{
+    			//System.out.println("key--"+execEntry.getKey()+"--Value--"+execEntry.getValue());
+    			if(execEntry.getValue().compareTo(component_id)==0)
+    			{
+    				 //System.out.println("component: "+component_id+" task_id: "+Integer.toString(execEntry.getKey().getStartTask()));
+    				task_ids.add(Integer.toString(execEntry.getKey().getStartTask()));
+    				
+    			}
+    			
+    		}
+    		
+    		String Tasks="[";
+    		for(String s : task_ids)
+    		{
+    			Tasks = Tasks+" "+s+" ";
+    		}
+    		 Tasks=Tasks+"]";
+    	
+    		*/
+    		// System.out.println("HOST: "+host+" PORT: "+port+"--COMPONENT--"+component_id + "--Metric: "+metrics[1]+ " Topology: "+topology_id+" Task Id: "+task_id);
+    		
+    		
+    		
+    		if(_topologies.get(topology_id)==null)
+    		{
+    			System.out.println("ERROR: this topology does not exist!!!!");
+    			return;
+    			
+    		}
+    		else
+    		{
+		//	System.out.println(component_id+": "+Integer.toString(component_id.length()));
+		//	System.out.println("topology: "+_topologies.get(topology_id).getName());
+    			Node node = _topologies.get(topology_id).getNode(component_id);
+    			if(node==null)
+    			{
+    				System.out.println("ERROR: this component " + component_id + " does not exist!!!!");
+        			return;
+    				
+    			}
+    			else
+    			{
+    				if(node.containsTask(task_id)==true)
+    				{
+    					node.setTaskThroughput(task_id, Double.parseDouble(metrics[1]));
+    					
+    				}
+    				else
+    				{
+    					node.addTask(task_id, Double.parseDouble(metrics[1]));
+    					
+    				}
+    				
+    				
+    				node.CalculateOverallThroughput();
+    			}
+    		}
+    		
+           
+    	} 
     }
 
     public void testMigrate(Topologies topologies, Cluster cluster) {
@@ -296,6 +476,22 @@ public class ElasticityScheduler implements IScheduler {
 
         }
         System.out.println("/******end testMigrate********/");
+    }
+
+    public void migrateTasks(TopologyDetails topology, Cluster cluster,
+        List<ExecutorDetails> executors, WorkerSlot slot) {
+        String topologyId = topology.getId();
+        SchedulerAssignment currentAssignment = cluster
+            .getAssignmentById(topologyId);
+        Map<ExecutorDetails, WorkerSlot> c = currentAssignment
+            .getExecutorToSlot();
+
+        for (ExecutorDetails executor : executors) {
+            c.remove(executor);
+        }
+
+        cluster.assign(slot, topologyId, executors);
+        LOG.info("Migrating executors: " + executors + " to slot: " + slot);
     }
 
     public void removeTask(TopologyDetails topology, Cluster cluster,
@@ -390,95 +586,11 @@ public class ElasticityScheduler implements IScheduler {
 
     }
 
-    // Parse metric data
-    public void parseData(String metricFile) {
-        FileInputStream fis = null;
-        try {
-            fis = new FileInputStream(metricFile);
-        } catch (FileNotFoundException e) {
-            System.err.println("Caught FileNotFoundException: "
-                + e.getMessage());
-            return;
-        }
-        Scanner scanner = new Scanner(fis);
-        Map<String, Double> occurrence = new HashMap<String, Double>();
-        Map<String, Double> numExecute = new HashMap<String, Double>();
-        while (scanner.hasNextLine()) {
-            // System.out.println(scanner.nextLine());
-            String line = scanner.nextLine();
-            String[] splited = line.split("\\s+");
-            int numCount = 0;
-
-            for (int i = 0; i < splited.length; i++) {
-                // System.out.println(Integer.toString(i)+"---"+splited[i]);
-            }
-            if (occurrence.containsKey(splited[5]) == false) {
-                occurrence.put(splited[5], 0.0);
-                numExecute.put(splited[5], 0.0);
-            }
-
-            try {
-                numCount = Integer.parseInt(splited[7]);
-            } catch (Exception e) {
-                LOG.info("Exception: " + e.getMessage());
-                continue;
-            }
-
-            numExecute.put(splited[5], numExecute.get(splited[5]) + numCount);
-            occurrence.put(splited[5], occurrence.get(splited[5]) + 1);
-            // System.out.println(map.get(splited[5]));
-        }
-        // System.out.println("/*****occurrence*******/");
-        // printMap(occurrence);
-        // System.out.println("/*****numExecute*******/");
-        // printMap(numExecute);
-        System.out.println("/*****avg*******/");
-        for (Entry<String, Topology> topoEntry : _topologies.entrySet()) {
-            getAverage(occurrence, numExecute, topoEntry.getKey());
-        }
-
-        scanner.close();
-    }
-
-    public static void printMap(Map mp) {
-        Iterator it = mp.entrySet().iterator();
-        while (it.hasNext()) {
-            Map.Entry pairs = (Map.Entry) it.next();
-            System.out.println(pairs.getKey() + " = " + pairs.getValue());
-
-        }
-    }
-
-    public static void getAverage(Map occurrence, Map numExecute,
-        String topoName) {
-        Iterator it = numExecute.entrySet().iterator();
-        Topology topo = _topologies.get(topoName);
-        Node root = topo.getRoot();
-
-        while (it.hasNext()) {
-            Map.Entry entry = (Map.Entry) it.next();
-            String key = (String) entry.getKey();
-            double val = (Double) entry.getValue();
-            String nodeName = (key.split(":"))[1];
-            LOG.info("Getting average for: " + nodeName);
-            Node node = root.getChildren(nodeName);
-
-            double avg = (val) / (Double) occurrence.get(key);
-            System.out.println(key + " avg: " + avg);
-
-            if (node == null) {
-                LOG.info("TOPOLOGY INFORMATION IS WRONG");
-            } else {
-                node.setThroughput(avg);
-            }
-        }
-    }
-
     public void readTopology() {
         try {
             File folder = new File(TOPOLOGY_DIR);
             File[] topologyFiles = folder.listFiles();
-
+           // System.out.println("HERE_1");
             if (topologyFiles == null) {
                 return;
             }
@@ -486,8 +598,7 @@ public class ElasticityScheduler implements IScheduler {
             for (int i = 0; i < topologyFiles.length; i++) {
                 FileReader file = new FileReader(topologyFiles[i]);
                 BufferedReader reader = new BufferedReader(file);
-                String line = null;
-                Node root = new Node(ROOT_NODE);
+                HashMap<String, Node> nodes = new HashMap<String, Node>();
                 String topologyName = topologyFiles[i].getName();
 
                 if (_topologies.containsKey(topologyName)
@@ -496,14 +607,29 @@ public class ElasticityScheduler implements IScheduler {
                 }
 
                 try {
+                    String line = null;
+
                     while ((line = reader.readLine()) != null) {
                         String _line[] = line.split(",");
-                        Node parent = new Node(_line[0]);
-                        Node child = new Node(_line[1]);
+                        Node parent;
+                        Node child;
 
+                        if (!nodes.containsKey(_line[0])) {
+                            parent = new Node(_line[0]);
+                            nodes.put(_line[0], parent);
+                        } else {
+                            parent = nodes.get(_line[0]);
+                        }
+
+                        if (!nodes.containsKey(_line[1])) {
+                            child = new Node(_line[1]);
+                            nodes.put(_line[1], child);
+                        } else {
+                            child = nodes.get(_line[1]);
+                        }
+
+                        LOG.info("Adding parent:" + _line[0] + " child: "  + _line[1]);
                         parent.addChildren(child);
-                        root.addChildren(parent);
-                        root.addChildren(child);
                     }
 
                     reader.close();
@@ -511,7 +637,8 @@ public class ElasticityScheduler implements IScheduler {
                     e.printStackTrace();
                 }
 
-                Topology newTopology = new Topology(topologyName, root);
+                Topology newTopology = new Topology(topologyName, nodes);
+
                 LOG.info("Added new topology: " + topologyName);
                 _topologies.put(topologyName, newTopology);
             }

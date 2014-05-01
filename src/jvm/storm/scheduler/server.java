@@ -63,7 +63,7 @@ public class server extends Thread {
 	
 	public String getMsg()
 	{
-		System.out.println("size of MsgQueue: "+Integer.toString(this.MsgQueue.size()));
+		// System.out.println("size of MsgQueue: "+Integer.toString(this.MsgQueue.size()));
 		return this.MsgQueue.poll();
 		
 	}
