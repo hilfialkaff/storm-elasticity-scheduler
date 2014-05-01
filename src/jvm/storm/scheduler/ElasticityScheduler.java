@@ -12,8 +12,6 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
-import java.util.Scanner;
-import java.io.*;
 
 import org.mortbay.log.Log;
 import org.slf4j.Logger;
@@ -38,7 +36,8 @@ import backtype.storm.scheduler.WorkerSlot;
  * </pre>
  */
 public class ElasticityScheduler implements IScheduler {
-    private static final Logger LOG = LoggerFactory.getLogger(ElasticityScheduler.class);
+    private static final Logger LOG = LoggerFactory
+        .getLogger(ElasticityScheduler.class);
     private static final String ROOT_NODE = "root";
     private static final String TOPOLOGY_DIR = "/proj/CS525/exp/stormCluster/project/storm-experiments/topologies/";
     // private static final String NIMBUS_HOST =
@@ -55,40 +54,33 @@ public class ElasticityScheduler implements IScheduler {
 
     @Override
     public void prepare(Map conf) {
-    	this.metrics_server = new server(METRICS_RECV_PORT);
-		this.metrics_server.start();
-		System.out.println("Server Successfully started!!");
-		
-		Process theProcess = null;
-	      BufferedReader inStream = null;
-	     
-	      /*
-		 try
-	      {
-			 String command = "java -cp "+ELASTICITY_SCHEDULER_DIR+"/target/storm_elasticity_thrift-1.0.0-SNAPSHOT-jar-with-dependencies.jar storm.scheduler.ThriftMetrics";
-			System.out.println("Starting Metrics client routine..."); 
-			this.theProcess = Runtime.getRuntime().exec("java -cp "+ELASTICITY_SCHEDULER_DIR+"/target/storm_elasticity_thrift-1.0.0-SNAPSHOT-jar-with-dependencies.jar storm.scheduler.ThriftMetrics");
-			System.out.println("Metrics client routine started...");
-	          //java -cp target/storm_elasticity_thrift-1.0.0-SNAPSHOT-jar-with-dependencies.jar storm.scheduler.ThriftMetrics
-	      }
-	      catch(IOException e)
-	      {
-	         System.err.println("Error on exec() method");
-	         e.printStackTrace();  
-	      }
-		 
-		 try
-	      {
-	         inStream = new BufferedReader(new InputStreamReader( this.theProcess.getInputStream() ));  
-	         System.out.println(inStream.readLine());
-	      }
-	      catch(IOException e)
-	      {
-	         System.err.println("Error on inStream.readLine()");
-	         e.printStackTrace();  
-	      }
-		*/
-		
+        this.metrics_server = new server(METRICS_RECV_PORT);
+        this.metrics_server.start();
+        System.out.println("Server Successfully started!!");
+
+        Process theProcess = null;
+        BufferedReader inStream = null;
+
+        /*
+         * try { String command = "java -cp "+ELASTICITY_SCHEDULER_DIR+
+         * "/target/storm_elasticity_thrift-1.0.0-SNAPSHOT-jar-with-dependencies.jar storm.scheduler.ThriftMetrics"
+         * ; System.out.println("Starting Metrics client routine...");
+         * this.theProcess =
+         * Runtime.getRuntime().exec("java -cp "+ELASTICITY_SCHEDULER_DIR+
+         * "/target/storm_elasticity_thrift-1.0.0-SNAPSHOT-jar-with-dependencies.jar storm.scheduler.ThriftMetrics"
+         * ); System.out.println("Metrics client routine started..."); //java
+         * -cp
+         * target/storm_elasticity_thrift-1.0.0-SNAPSHOT-jar-with-dependencies
+         * .jar storm.scheduler.ThriftMetrics } catch(IOException e) {
+         * System.err.println("Error on exec() method"); e.printStackTrace(); }
+         * 
+         * try { inStream = new BufferedReader(new InputStreamReader(
+         * this.theProcess.getInputStream() ));
+         * System.out.println(inStream.readLine()); } catch(IOException e) {
+         * System.err.println("Error on inStream.readLine()");
+         * e.printStackTrace(); }
+         */
+
     }
 
     public void printOurTopology() {
@@ -137,11 +129,12 @@ public class ElasticityScheduler implements IScheduler {
     /* TODO: Currently only assume one topology */
     public void _schedule(Topologies topologies, Cluster cluster) {
         for (Topology topology : _topologies.values()) {
-            TopologyDetails topologyDetails = topologies.getByName(topology.getName());
+            TopologyDetails topologyDetails = topologies.getByName(topology
+                .getName());
 
-	        if(topologyDetails == null) {
-	            continue;
-	        }
+            if (topologyDetails == null) {
+                continue;
+            }
 
             HashMap<String, Supervisor> supervisors = new HashMap<String, Supervisor>();
             SchedulerAssignment currentAssignment = cluster
@@ -155,7 +148,7 @@ public class ElasticityScheduler implements IScheduler {
                 Log.info("current assignments: {}");
                 return;
             }
-            
+
             Log.info("current assignments: "
                 + currentAssignment.getExecutorToSlot());
             Map<ExecutorDetails, WorkerSlot> executorMap = currentAssignment
@@ -167,10 +160,9 @@ public class ElasticityScheduler implements IScheduler {
                 ExecutorDetails executorDetails = executorEntry.getKey();
                 String startTask = Integer.toString(executorDetails
                     .getStartTask());
-                String supervisorName = executorEntry.getValue()
-                    .getNodeId();
+                String supervisorName = executorEntry.getValue().getNodeId();
                 Supervisor supervisor;
-                Node node=null;
+                Node node = null;
                 double throughput;
 
                 if (!supervisors.containsKey(supervisorName)) {
@@ -179,20 +171,21 @@ public class ElasticityScheduler implements IScheduler {
                 } else {
                     supervisor = supervisors.get(supervisorName);
                 }
-		    
+
                 node = topology.getNodeByTask(startTask);
 
-		        if(node == null) {
+                if (node == null) {
                     continue;
                 }
 
                 throughput = node.getTaskBandwidth(startTask);
                 supervisor.addTask(executorDetails, throughput);
-			
+
             }
 
-			for (Node node1 : topology.getNodes().values()) {
-				LOG.info("node id: " + node1.getName() + "tasks:" + node1.getTasks());
+            for (Node node1 : topology.getNodes().values()) {
+                LOG.info("node id: " + node1.getName() + "tasks:"
+                    + node1.getTasks());
 
             }
 
@@ -213,10 +206,12 @@ public class ElasticityScheduler implements IScheduler {
                     .entrySet()) {
                     double throughput = taskDetails.getValue();
                     ExecutorDetails task = taskDetails.getKey();
-                    LOG.info("throughput:" + throughput + " best:" + bestThroughput + " migrated:" + migratedThroughput + " needed:" + throughputToMigrate);
+                    LOG.info("throughput:" + throughput + " best:"
+                        + bestThroughput + " migrated:" + migratedThroughput
+                        + " needed:" + throughputToMigrate);
 
-                    if (throughput > bestThroughput && (migratedThroughput + throughput) 
-                        < throughputToMigrate) {
+                    if (throughput > bestThroughput
+                        && (migratedThroughput + throughput) < throughputToMigrate) {
                         bestThroughput = throughput;
                         bestTask = task;
                     }
@@ -233,7 +228,7 @@ public class ElasticityScheduler implements IScheduler {
             for (SupervisorDetails clusterSupervisor : clusterSupervisors) {
                 String hostname = clusterSupervisor.getId();
                 Supervisor supervisor = supervisors.get(hostname);
-                
+
                 /* It has been scheduled previously */
                 if (supervisor != null) {
                     continue;
@@ -250,10 +245,10 @@ public class ElasticityScheduler implements IScheduler {
                     List<ExecutorDetails> tasks = tasksToMigrate.subList(i
                         / numSlots * tasksToMigrate.size(), (i + 1) / numSlots
                         * tasksToMigrate.size());
-                        
+
                     migrateTasks(topologyDetails, cluster, tasks, slot);
                 }
-             }
+            }
         }
     }
 
@@ -319,88 +314,48 @@ public class ElasticityScheduler implements IScheduler {
     }
 
     public void updateMetrics() {
-while(this.metrics_server.MsgQueue.size()>0)
-    	{
-    		String data = this.metrics_server.getMsg();
-    		String[] metrics = data.split(",");
-    		
-    		
-    		String[] id_tokens = metrics[0].split(":");
-    		
-    		String host = id_tokens[0];
-    		String port = id_tokens[1];
-    		String component_id = id_tokens[2];
-    		String topology_id_full = id_tokens[3];
-    		String topology_id = id_tokens[3].split("-")[0];
-    		String task_id = id_tokens[4];
-    		
-    		/*
-    		List<String> task_ids=new ArrayList();
-    		
-    		
-    		Map<ExecutorDetails, String> mapping =  topologies.getById(topology_id_full).getExecutorToComponent();
-    		
-    		for (Entry<ExecutorDetails, String> execEntry : mapping.entrySet())
-    		{
-    			//System.out.println("key--"+execEntry.getKey()+"--Value--"+execEntry.getValue());
-    			if(execEntry.getValue().compareTo(component_id)==0)
-    			{
-    				 //System.out.println("component: "+component_id+" task_id: "+Integer.toString(execEntry.getKey().getStartTask()));
-    				task_ids.add(Integer.toString(execEntry.getKey().getStartTask()));
-    				
-    			}
-    			
-    		}
-    		
-    		String Tasks="[";
-    		for(String s : task_ids)
-    		{
-    			Tasks = Tasks+" "+s+" ";
-    		}
-    		 Tasks=Tasks+"]";
-    	
-    		*/
-    		// System.out.println("HOST: "+host+" PORT: "+port+"--COMPONENT--"+component_id + "--Metric: "+metrics[1]+ " Topology: "+topology_id+" Task Id: "+task_id);
-    		
-    		
-    		
-    		if(_topologies.get(topology_id)==null)
-    		{
-    			System.out.println("ERROR: this topology does not exist!!!!");
-    			return;
-    			
-    		}
-    		else
-    		{
-		//	System.out.println(component_id+": "+Integer.toString(component_id.length()));
-		//	System.out.println("topology: "+_topologies.get(topology_id).getName());
-    			Node node = _topologies.get(topology_id).getNode(component_id);
-    			if(node==null)
-    			{
-    				System.out.println("ERROR: this component " + component_id + " does not exist!!!!");
-        			return;
-    				
-    			}
-    			else
-    			{
-    				if(node.containsTask(task_id)==true)
-    				{
-    					node.setTaskThroughput(task_id, Double.parseDouble(metrics[1]));
-    					
-    				}
-    				else
-    				{
-    					node.addTask(task_id, Double.parseDouble(metrics[1]));
-    					
-    				}
-    				
-    				
-    				node.CalculateOverallThroughput();
-    			}
-    		}
-    		
-           
-    	} 
+        while (this.metrics_server.MsgQueue.size() > 0) {
+            String data = this.metrics_server.getMsg();
+            String[] metrics = data.split(",");
+
+            String[] id_tokens = metrics[0].split(":");
+
+            String host = id_tokens[0];
+            String port = id_tokens[1];
+            String component_id = id_tokens[2];
+            String topology_id_full = id_tokens[3];
+            String topology_id = id_tokens[3].split("-")[0];
+            String task_id = id_tokens[4];
+
+            if (_topologies.get(topology_id) == null) {
+                System.out.println("ERROR: this topology does not exist!!!!");
+                return;
+
+            } else {
+                // System.out.println(component_id+": "+Integer.toString(component_id.length()));
+                // System.out.println("topology: "+_topologies.get(topology_id).getName());
+                Node node = _topologies.get(topology_id).getNode(component_id);
+                if (node == null) {
+                    System.out.println("ERROR: this component " + component_id
+                        + " does not exist!!!!");
+                    return;
+
+                } else {
+                    if (node.containsTask(task_id) == true) {
+                        node.setTaskThroughput(task_id,
+                            Double.parseDouble(metrics[1]));
+
+                    } else {
+                        node.addTask(task_id, Double.parseDouble(metrics[1]));
+
+                    }
+
+                    node.CalculateOverallThroughput();
+                }
+            }
+            LOG.info(host + ',' + port + ',' + component_id + ',' + task_id
+                + ',' + metrics[1]);
+        }
     }
 
     public void testMigrate(Topologies topologies, Cluster cluster) {
@@ -590,7 +545,7 @@ while(this.metrics_server.MsgQueue.size()>0)
         try {
             File folder = new File(TOPOLOGY_DIR);
             File[] topologyFiles = folder.listFiles();
-           // System.out.println("HERE_1");
+            // System.out.println("HERE_1");
             if (topologyFiles == null) {
                 return;
             }
@@ -628,7 +583,8 @@ while(this.metrics_server.MsgQueue.size()>0)
                             child = nodes.get(_line[1]);
                         }
 
-                        LOG.info("Adding parent:" + _line[0] + " child: "  + _line[1]);
+                        LOG.info("Adding parent:" + _line[0] + " child: "
+                            + _line[1]);
                         parent.addChildren(child);
                     }
 
