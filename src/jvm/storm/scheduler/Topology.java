@@ -18,8 +18,6 @@ public class Topology {
     public Node getNode(String name) {
         Node ret;
 
-        System.out.println("getNodes(): " + _nodes);
-
         if (!_nodes.containsKey(name)) {
             ret = null;
         } else {

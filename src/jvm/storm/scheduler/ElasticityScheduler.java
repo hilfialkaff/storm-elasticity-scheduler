@@ -179,10 +179,10 @@ public class ElasticityScheduler implements IScheduler {
 
             }
 
-            for (Node node1 : topology.getNodes().values()) {
-                LOG.info("node id: " + node1.getName() + "tasks: "
-                    + node1.getTasks());
-            }
+            // for (Node node1 : topology.getNodes().values()) {
+            // LOG.info("node id: " + node1.getName() + "tasks: "
+            // + node1.getTasks());
+            // }
 
             ArrayList<ExecutorDetails> tasksToMigrate = new ArrayList<ExecutorDetails>();
             avgThroughput = computeAvgThroughput(supervisors);
@@ -197,15 +197,15 @@ public class ElasticityScheduler implements IScheduler {
                 double bestThroughput = 0.0;
                 ExecutorDetails bestTask = new ExecutorDetails(0, 0);
 
-                LOG.info("Supervisor:" + supervisor.getName() + " migrated: "
-                    + migratedThroughput + " needed: " + throughputToMigrate);
+                // LOG.info("Supervisor:" + supervisor.getName() + " migrated: "
+                // + migratedThroughput + " needed: " + throughputToMigrate);
 
                 for (Entry<ExecutorDetails, Double> taskDetails : curTasks
                     .entrySet()) {
                     double throughput = taskDetails.getValue();
                     ExecutorDetails task = taskDetails.getKey();
-                    LOG.info("throughput:" + throughput + " best:"
-                        + bestThroughput);
+                    // LOG.info("throughput:" + throughput + " best:"
+                    // + bestThroughput);
 
                     if (throughput > bestThroughput
                         && (migratedThroughput + throughput) < throughputToMigrate) {
@@ -343,10 +343,16 @@ public class ElasticityScheduler implements IScheduler {
                     if (node.containsTask(task_id) == true) {
                         double prevThroughput = node
                             .getTaskAccumThroughput(task_id);
-                        node.setTaskThroughput(task_id,
-                            Double.parseDouble(metrics[1]) - prevThroughput);
-                        node.setTaskAccumThroughput(task_id,
-                            Double.parseDouble(metrics[1]));
+                        double curThroughput = Double.parseDouble(metrics[1]);
+
+                        /* Mis-ordering of packets */
+                        if (prevThroughput > curThroughput) {
+                            continue;
+                        }
+
+                        node.setTaskThroughput(task_id, curThroughput
+                            - prevThroughput);
+                        node.setTaskAccumThroughput(task_id, curThroughput);
                     } else {
                         node.addTask(task_id, Double.parseDouble(metrics[1]));
 
@@ -446,7 +452,7 @@ public class ElasticityScheduler implements IScheduler {
         }
 
         cluster.assign(slot, topologyId, executors);
-        LOG.info("Migrating executors: " + executors + " to slot: " + slot);
+        // LOG.info("Migrating executors: " + executors + " to slot: " + slot);
     }
 
     public void removeTask(TopologyDetails topology, Cluster cluster,
@@ -492,10 +498,6 @@ public class ElasticityScheduler implements IScheduler {
 
                 }
 
-                // Log.info("needs scheduling(component->executor): "+
-                // componentToExecutors);
-                // Log.info("needs scheduling(executor->components): "+
-                // cluster.getNeedsSchedulingExecutorToComponents(topology));
                 SchedulerAssignment currentAssignment = cluster
                     .getAssignmentById(topologies.getByName(topoEntry.getKey())
                         .getId());
@@ -582,8 +584,6 @@ public class ElasticityScheduler implements IScheduler {
                             child = nodes.get(_line[1]);
                         }
 
-                        LOG.info("Adding parent:" + _line[0] + " child: "
-                            + _line[1]);
                         parent.addChildren(child);
                     }
 
