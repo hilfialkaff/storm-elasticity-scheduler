@@ -1,12 +1,15 @@
 package storm.scheduler;
 
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.LinkedList;
-import java.util.*;
+import java.util.Map;
+
 public class Node {
     private final String _name;
     private final HashMap<String, Node> _children;
     private final HashMap<String, Double> _tasks;
+    private final HashMap<String, Double> _tasksAccum;
     private double _throughput;
     private int _totalChildren;
 
@@ -14,6 +17,7 @@ public class Node {
         _name = name;
         _children = new HashMap<String, Node>();
         _tasks = new HashMap<String, Double>();
+        _tasksAccum = new HashMap<String, Double>();
         _totalChildren = 0;
     }
 
@@ -62,15 +66,23 @@ public class Node {
         return _children;
     }
 
-    public void setThroughput(double throughput) {
-        _throughput = throughput;
+    public HashMap<String, Double> getTasks() {
+        return _tasks;
     }
 
-    public double getThroughput() {
-        return _throughput;
+    public void addTask(String task_id, Double throughput) {
+        _tasks.put(task_id, throughput);
     }
 
-    public double getTaskBandwidth(String name) {
+    public boolean containsTask(String task_id) {
+        return _tasks.containsKey(task_id);
+    }
+
+    public void setTaskThroughput(String task_id, Double Throughput) {
+        _tasks.put(task_id, Throughput);
+    }
+
+    public double getTaskThroughput(String name) {
         double ret;
 
         if (!_tasks.containsKey(name)) {
@@ -82,36 +94,35 @@ public class Node {
         return ret;
     }
 
-    public HashMap<String, Double> getTasks() {
-        return _tasks;
+    public void setTaskAccumThroughput(String task_id, Double Throughput) {
+        _tasksAccum.put(task_id, Throughput);
     }
- public void addTask(String task_id, Double throughput)
-    {
-    	_tasks.put(task_id, throughput);
+
+    public double getTaskAccumThroughput(String name) {
+        double ret;
+
+        if (!_tasksAccum.containsKey(name)) {
+            ret = -1;
+        } else {
+            ret = _tasksAccum.get(name).doubleValue();
+        }
+
+        return ret;
     }
-    public boolean containsTask(String task_id)
-    {
-    	return _tasks.containsKey(task_id);
+
+    public double CalculateOverallThroughput() {
+
+        Iterator<Map.Entry<String, Double>> it = _tasks.entrySet().iterator();
+        Double throughput = 0.0;
+
+        while (it.hasNext()) {
+            Map.Entry<String, Double> entry = it.next();
+            String key = entry.getKey();
+            Double val = entry.getValue();
+            throughput += val;
+        }
+
+        return throughput;
     }
-    public void setTaskThroughput(String task_id, Double Throughput)
-    {
-    	_tasks.put(task_id, Throughput);
-    }
-    public double CalculateOverallThroughput()
-    {
-    	
-    	Iterator<Map.Entry<String, Double>> it = _tasks.entrySet().iterator();
-    	Double throughput = 0.0;
-    	
-    	while (it.hasNext()) {
-    	    Map.Entry<String, Double> entry = (Map.Entry) it.next();
-    	    String key = (String)entry.getKey();
-    	    Double val = (Double)entry.getValue();
-    	    throughput+=val;
-    	}
-    	this._throughput = throughput;
-    	return this._throughput;
-    }
-  
 
 }

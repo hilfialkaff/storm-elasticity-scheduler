@@ -47,9 +47,11 @@ public class ThriftExample {
                         String componentId = executorSummary.getComponent_id();
                         Map<String, Map<String, Long>> transfer = executorStats
                             .getTransferred();
-  
+
+                        System.out.println(transfer);
                         System.out.println("executor <" + host + ',' + port
-                            + ',' + componentId + "> transferred: " + transfer.get("600"));
+                            + ',' + componentId + "> transferred: "
+                            + transfer.get("600"));
                     }
                 }
 

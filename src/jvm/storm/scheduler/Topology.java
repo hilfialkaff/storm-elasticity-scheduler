@@ -37,7 +37,7 @@ public class Topology {
         Node ret = null;
 
         for (Node node : _nodes.values()) {
-            if (node.getTaskBandwidth(taskName) != -1) {
+            if (node.getTaskThroughput(taskName) != -1) {
                 ret = node;
                 break;
             }

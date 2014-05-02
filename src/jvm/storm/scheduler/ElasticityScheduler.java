@@ -84,8 +84,6 @@ public class ElasticityScheduler implements IScheduler {
     }
 
     public void printOurTopology() {
-        LOG.info("HERE");
-
         for (Topology topology : _topologies.values()) {
             HashMap<String, Node> nodes = topology.getNodes();
 
@@ -149,8 +147,6 @@ public class ElasticityScheduler implements IScheduler {
                 return;
             }
 
-            Log.info("current assignments: "
-                + currentAssignment.getExecutorToSlot());
             Map<ExecutorDetails, WorkerSlot> executorMap = currentAssignment
                 .getExecutorToSlot();
 
@@ -178,15 +174,14 @@ public class ElasticityScheduler implements IScheduler {
                     continue;
                 }
 
-                throughput = node.getTaskBandwidth(startTask);
+                throughput = node.getTaskThroughput(startTask);
                 supervisor.addTask(executorDetails, throughput);
 
             }
 
             for (Node node1 : topology.getNodes().values()) {
-                LOG.info("node id: " + node1.getName() + "tasks:"
+                LOG.info("node id: " + node1.getName() + "tasks: "
                     + node1.getTasks());
-
             }
 
             ArrayList<ExecutorDetails> tasksToMigrate = new ArrayList<ExecutorDetails>();
@@ -202,13 +197,15 @@ public class ElasticityScheduler implements IScheduler {
                 double bestThroughput = 0.0;
                 ExecutorDetails bestTask = new ExecutorDetails(0, 0);
 
+                LOG.info("Supervisor:" + supervisor.getName() + " migrated: "
+                    + migratedThroughput + " needed: " + throughputToMigrate);
+
                 for (Entry<ExecutorDetails, Double> taskDetails : curTasks
                     .entrySet()) {
                     double throughput = taskDetails.getValue();
                     ExecutorDetails task = taskDetails.getKey();
                     LOG.info("throughput:" + throughput + " best:"
-                        + bestThroughput + " migrated:" + migratedThroughput
-                        + " needed:" + throughputToMigrate);
+                        + bestThroughput);
 
                     if (throughput > bestThroughput
                         && (migratedThroughput + throughput) < throughputToMigrate) {
@@ -221,7 +218,13 @@ public class ElasticityScheduler implements IScheduler {
                     continue;
                 }
 
+                migratedThroughput += bestThroughput;
                 tasksToMigrate.add(bestTask);
+            }
+
+            /* Nothing to migrate */
+            if (tasksToMigrate.size() == 0) {
+                return;
             }
 
             /* Migrate to new supervisors */
@@ -269,8 +272,6 @@ public class ElasticityScheduler implements IScheduler {
 
         readTopology();
         updateMetrics();
-
-        printOurTopology();
 
         // if (_numMachines != numSupervisor) {
         // System.out.println("Old supervisor: " + _numMachines + " new: "
@@ -332,8 +333,6 @@ public class ElasticityScheduler implements IScheduler {
                 return;
 
             } else {
-                // System.out.println(component_id+": "+Integer.toString(component_id.length()));
-                // System.out.println("topology: "+_topologies.get(topology_id).getName());
                 Node node = _topologies.get(topology_id).getNode(component_id);
                 if (node == null) {
                     System.out.println("ERROR: this component " + component_id
@@ -342,19 +341,25 @@ public class ElasticityScheduler implements IScheduler {
 
                 } else {
                     if (node.containsTask(task_id) == true) {
+                        double prevThroughput = node
+                            .getTaskAccumThroughput(task_id);
                         node.setTaskThroughput(task_id,
+                            Double.parseDouble(metrics[1]) - prevThroughput);
+                        node.setTaskAccumThroughput(task_id,
                             Double.parseDouble(metrics[1]));
-
                     } else {
                         node.addTask(task_id, Double.parseDouble(metrics[1]));
 
                     }
 
                     node.CalculateOverallThroughput();
+
+                    LOG.info("Updated metric: " + host + ',' + port + ','
+                        + component_id + ',' + task_id + ','
+                        + node.getTaskThroughput(task_id) + ','
+                        + node.getTaskAccumThroughput(task_id));
                 }
             }
-            LOG.info(host + ',' + port + ',' + component_id + ',' + task_id
-                + ',' + metrics[1]);
         }
     }
 
@@ -378,11 +383,6 @@ public class ElasticityScheduler implements IScheduler {
                 // + Integer.toString(supervisors.size()));
                 for (SupervisorDetails supervisor : supervisors) {
                     Map meta = (Map) supervisor.getSchedulerMeta();
-                    // System.out.println("Supervisor name: " + supervisor +
-                    // "\n");
-                    // System.out.println("id: " + supervisor.getId() +
-                    // " host: "
-                    // + supervisor.getHost());
                     visors.add(supervisor);
                 }
                 List<ExecutorDetails> executors = componentToExecutors
@@ -545,7 +545,6 @@ public class ElasticityScheduler implements IScheduler {
         try {
             File folder = new File(TOPOLOGY_DIR);
             File[] topologyFiles = folder.listFiles();
-            // System.out.println("HERE_1");
             if (topologyFiles == null) {
                 return;
             }
