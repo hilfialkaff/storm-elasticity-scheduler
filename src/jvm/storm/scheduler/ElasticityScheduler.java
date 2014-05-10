@@ -51,6 +51,7 @@ public class ElasticityScheduler implements IScheduler {
     private static int _numMachines = 0;
     private server metrics_server;
     private Process theProcess;
+    private static int virtualTime = 0;
 
     @Override
     public void prepare(Map conf) {
@@ -60,27 +61,6 @@ public class ElasticityScheduler implements IScheduler {
 
         Process theProcess = null;
         BufferedReader inStream = null;
-
-        /*
-         * try { String command = "java -cp "+ELASTICITY_SCHEDULER_DIR+
-         * "/target/storm_elasticity_thrift-1.0.0-SNAPSHOT-jar-with-dependencies.jar storm.scheduler.ThriftMetrics"
-         * ; System.out.println("Starting Metrics client routine...");
-         * this.theProcess =
-         * Runtime.getRuntime().exec("java -cp "+ELASTICITY_SCHEDULER_DIR+
-         * "/target/storm_elasticity_thrift-1.0.0-SNAPSHOT-jar-with-dependencies.jar storm.scheduler.ThriftMetrics"
-         * ); System.out.println("Metrics client routine started..."); //java
-         * -cp
-         * target/storm_elasticity_thrift-1.0.0-SNAPSHOT-jar-with-dependencies
-         * .jar storm.scheduler.ThriftMetrics } catch(IOException e) {
-         * System.err.println("Error on exec() method"); e.printStackTrace(); }
-         * 
-         * try { inStream = new BufferedReader(new InputStreamReader(
-         * this.theProcess.getInputStream() ));
-         * System.out.println(inStream.readLine()); } catch(IOException e) {
-         * System.err.println("Error on inStream.readLine()");
-         * e.printStackTrace(); }
-         */
-
     }
 
     public void printOurTopology() {
@@ -150,7 +130,6 @@ public class ElasticityScheduler implements IScheduler {
             Map<ExecutorDetails, WorkerSlot> executorMap = currentAssignment
                 .getExecutorToSlot();
 
-            /* TODO: Assume there is only one task */
             for (Entry<ExecutorDetails, WorkerSlot> executorEntry : executorMap
                 .entrySet()) {
                 ExecutorDetails executorDetails = executorEntry.getKey();
@@ -273,34 +252,22 @@ public class ElasticityScheduler implements IScheduler {
         readTopology();
         updateMetrics();
 
-        // if (_numMachines != numSupervisor) {
-        // System.out.println("Old supervisor: " + _numMachines + " new: "
-        // + numSupervisor);
-        // _numMachines = numSupervisor;
-        //
-        // _schedule(topologies, cluster);
-        // }
-        //
-        _schedule(topologies, cluster);
+        if (_numMachines != numSupervisor) {
+            System.out.println("Old supervisor: " + _numMachines + " new: "
+                + numSupervisor);
+            _numMachines = numSupervisor;
 
-        // for (Entry<String, Topology> topoEntry : _topologies.entrySet()) {
-        // TopologyDetails topology = topologies.getByName(topoEntry.getKey());
-        //
-        // // Topology doesn't exist anymore -> remove from database, else
-        // // schedule
-        // if (topology == null) {
-        // topologyToDelete.add(topoEntry.getKey());
-        // } else {
-        // boolean needsScheduling = cluster.needsScheduling(topology);
-        //
-        // if (!needsScheduling) {
-        // Log.info("Our topology DOES NOT NEED scheduling.");
-        // } else {
-        // /* Default scheduling for now */
-        // printCurTopology(cluster, topology);
-        // }
-        // }
-        // }
+            _schedule(topologies, cluster);
+        }
+
+        // Check which topology that still exists
+        for (Entry<String, Topology> topoEntry : _topologies.entrySet()) {
+            TopologyDetails topology = topologies.getByName(topoEntry.getKey());
+
+            if (topology == null) {
+                topologyToDelete.add(topoEntry.getKey());
+            }
+        }
 
         /* Delete non-existant topologies */
         for (String s : topologyToDelete) {
@@ -315,6 +282,8 @@ public class ElasticityScheduler implements IScheduler {
     }
 
     public void updateMetrics() {
+        virtualTime += 1;
+
         while (this.metrics_server.MsgQueue.size() > 0) {
             String data = this.metrics_server.getMsg();
             String[] metrics = data.split(",");
@@ -340,30 +309,16 @@ public class ElasticityScheduler implements IScheduler {
                     return;
 
                 } else {
-                    if (node.containsTask(task_id) == true) {
-                        double prevThroughput = node
-                            .getTaskAccumThroughput(task_id);
-                        double curThroughput = Double.parseDouble(metrics[1]);
-
-                        /* Mis-ordering of packets */
-                        if (prevThroughput > curThroughput) {
-                            continue;
-                        }
-
-                        node.setTaskThroughput(task_id, curThroughput
-                            - prevThroughput);
-                        node.setTaskAccumThroughput(task_id, curThroughput);
-                    } else {
-                        node.addTask(task_id, Double.parseDouble(metrics[1]));
-
+                    if (!node.containsTask(task_id)) {
+                        node.addTask(task_id);
                     }
 
-                    node.CalculateOverallThroughput();
+                    node.addTaskThroughput(task_id,
+                        Double.parseDouble(metrics[1]), virtualTime);
 
                     LOG.info("Updated metric: " + host + ',' + port + ','
                         + component_id + ',' + task_id + ','
-                        + node.getTaskThroughput(task_id) + ','
-                        + node.getTaskAccumThroughput(task_id));
+                        + node.getTaskThroughput(task_id));
                 }
             }
         }
